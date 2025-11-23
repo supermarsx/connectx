@@ -1,4 +1,4 @@
-# ConnectX (working title) – Cross‑Platform Game & System Specification
+# ConnectX – Cross‑Platform Game & System Specification
 
 ---
 
