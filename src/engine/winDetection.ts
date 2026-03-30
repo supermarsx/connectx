@@ -3,7 +3,7 @@
  * Checks for N-in-a-row in all four directions (horizontal, vertical, two diagonals).
  */
 
-import type { Board, PlayerId, BoardConfig } from './types.ts';
+import type { Board, PlayerId, BoardConfig, RoundResult } from './types.ts';
 import { EMPTY_CELL, DEFAULT_BOARD_CONFIG } from './types.ts';
 
 /** Direction vectors for the four possible win directions */
@@ -55,6 +55,62 @@ export function checkWinAtPosition(
   }
 
   return null;
+}
+
+/**
+ * Calculate bonus points for a winning move.
+ * - Win streak bonus: +1 for each consecutive win by the same player (2nd consecutive = +1, 3rd = +2, etc.)
+ * - Multi-alignment bonus: +1 for each additional N-in-a-row line through the winning position
+ *   (e.g., if the winning move creates 2 separate connect-N lines, that's +1 bonus)
+ */
+export function calculateRoundBonus(
+  board: Board,
+  row: number,
+  col: number,
+  connectN: number,
+  roundResults: RoundResult[],
+  winner: PlayerId
+): number {
+  let bonus = 0;
+
+  const player = board[row][col];
+  if (player === EMPTY_CELL) return 0;
+
+  const rows = board.length;
+  const cols = board[0].length;
+
+  let winLineCount = 0;
+  for (const { dr, dc } of DIRECTIONS) {
+    let count = 1;
+    for (let i = 1; i < connectN; i++) {
+      const r = row + dr * i;
+      const c = col + dc * i;
+      if (r < 0 || r >= rows || c < 0 || c >= cols) break;
+      if (board[r][c] !== player) break;
+      count++;
+    }
+    for (let i = 1; i < connectN; i++) {
+      const r = row - dr * i;
+      const c = col - dc * i;
+      if (r < 0 || r >= rows || c < 0 || c >= cols) break;
+      if (board[r][c] !== player) break;
+      count++;
+    }
+    if (count >= connectN) winLineCount++;
+  }
+  if (winLineCount > 1) bonus += winLineCount - 1;
+
+  let streak = 0;
+  for (let i = roundResults.length - 1; i >= 0; i--) {
+    if (roundResults[i].winner === winner) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+  bonus += streak;
+
+  return bonus;
 }
 
 /**

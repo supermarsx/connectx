@@ -1,5 +1,26 @@
 /* ConnectX Global Styles — Pastel bubble gum + soft brutalism */
 
+:root {
+  /* Typography */
+  --font-display: 'Poppins', 'Baloo 2', 'Nunito', sans-serif;
+  --font-body: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Feedback colors */
+  --color-success: #4CD08A;
+  --color-error: #FF4B6E;
+  --color-warning: #FFC155;
+  /* Accent colors */
+  --color-accent-pink: #FF6FAF;
+  --color-accent-mint: #64E0C6;
+  --color-accent-sun: #FFD36B;
+  /* Background */
+  --color-bg-base: #FAF7FB;
+  --color-bg-card: #F3ECFF;
+  /* Neutrals */
+  --color-neutral-900: #17171F;
+  --color-neutral-700: #444457;
+  --color-neutral-400: #9C9CB1;
+}
+
 *,
 *::before,
 *::after {
@@ -15,11 +36,15 @@ html {
 }
 
 body {
-  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-body);
   background-color: #FAF7FB;
   color: #17171F;
   min-height: 100vh;
   line-height: 1.5;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
 }
 
 #root {
@@ -43,13 +68,104 @@ button:not(:disabled):active {
   box-shadow: 2px 2px 0 #17171F !important;
 }
 
+/* Turn indicator animation */
+@keyframes turnSlideIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Board 3D flip entrance */
+@keyframes boardFlipIn {
+  from { transform: perspective(800px) rotateX(15deg); opacity: 0.8; }
+  to   { transform: perspective(800px) rotateX(0deg); opacity: 1; }
+}
+
 /* Cells */
 .cell {
   transition: transform 0.15s ease;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .cell:hover {
   transform: scale(1.05);
+}
+
+@keyframes ghost-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.ghost-piece {
+  animation: ghost-bob 1.2s ease-in-out infinite;
+}
+
+/* Feedback animations */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+@keyframes blockedFadeIn {
+  from {
+    background-color: transparent;
+    opacity: 0.3;
+    transform: scale(0.85);
+  }
+  to {
+    background-color: #E0D6E6;
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.cell-error {
+  animation: shake 0.3s ease;
+  box-shadow: 0 0 8px var(--color-error) !important;
+}
+
+@keyframes pieceDrop {
+  0% {
+    transform: translateY(var(--drop-distance));
+  }
+  70% {
+    transform: translateY(0);
+  }
+  85% {
+    transform: translateY(-8%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.cell-shake {
+  animation: shake 0.3s ease;
+}
+
+.cell-success {
+  box-shadow: 0 0 12px var(--color-success) !important;
+}
+
+/* Win piece pulse animation */
+@keyframes win-pulse {
+  0%, 100% { transform: scale(1.0); }
+  50% { transform: scale(1.08); }
+}
+
+.piece-winning {
+  animation: win-pulse 1.5s ease-in-out infinite;
+}
+
+/* Win banner animation */
+@keyframes banner-slide-in {
+  0% { transform: translateY(-20px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.win-banner {
+  animation: banner-slide-in 0.4s ease-out;
 }
 
 /* Selection highlight */
@@ -76,9 +192,195 @@ button:not(:disabled):active {
   background: #9C9CB1;
 }
 
+/* Bubble background animation */
+@keyframes bubble-float {
+  0% {
+    transform: translateY(0) translateX(0) scale(1);
+  }
+  25% {
+    transform: translateY(-25vh) translateX(15px) scale(1.05);
+  }
+  50% {
+    transform: translateY(-50vh) translateX(-10px) scale(0.95);
+  }
+  75% {
+    transform: translateY(-75vh) translateX(20px) scale(1.02);
+  }
+  100% {
+    transform: translateY(-100vh) translateX(0) scale(1);
+  }
+}
+
+/* Emote toast animation */
+@keyframes emoteFadeIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.9); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes emoteFadeOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(-8px) scale(0.9); }
+}
+
+.emote-toast {
+  animation: emoteFadeIn 0.2s ease-out, emoteFadeOut 0.4s ease-in 1.6s forwards;
+}
+
+/* Reduce motion */
+[data-reduce-motion="true"] *,
+[data-reduce-motion="true"] *::before,
+[data-reduce-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Desktop 3-column game layout */
+.game-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px;
+  gap: 20px;
+}
+
+.game-sidebar {
+  display: none;
+}
+
+.mobile-only {
+  display: flex;
+}
+
+@media (min-width: 1024px) {
+  .game-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr 220px;
+    max-width: 1100px;
+    gap: 24px;
+    align-items: start;
+  }
+
+  .game-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: sticky;
+    top: 24px;
+  }
+
+  .game-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .mobile-only {
+    display: none !important;
+  }
+}
+
 /* Responsive */
 @media (max-width: 480px) {
   html {
     font-size: 14px;
+  }
+}
+
+/* Mobile responsive — board sizing */
+@media (max-width: 768px) {
+  .board {
+    max-height: 65vh;
+    aspect-ratio: auto;
+    gap: 4px !important;
+    padding: 10px !important;
+    border-radius: 16px !important;
+  }
+
+  .cell {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .game-layout,
+  .game-screen {
+    padding: 12px !important;
+    gap: 12px !important;
+  }
+}
+
+/* Small phones — tighter spacing */
+@media (max-width: 380px) {
+  .board {
+    gap: 3px !important;
+    padding: 8px !important;
+  }
+
+  .cell {
+    min-width: 30px;
+    min-height: 30px;
+  }
+}
+
+/* Mobile bottom controls — scoreboard and controls stick to bottom */
+@media (max-width: 768px) {
+  .game-bottom-controls {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(250, 247, 251, 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-top: 2px solid #17171F;
+    padding: 10px 16px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    z-index: 100;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* Add bottom padding to game content so it doesn't get hidden behind fixed controls */
+  .game-layout,
+  .game-screen {
+    padding-bottom: 80px !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .game-bottom-controls {
+    /* On desktop, bottom controls are not fixed */
+    position: static;
+    background: none;
+    backdrop-filter: none;
+    border-top: none;
+    padding: 0;
+  }
+}
+
+/* Safe area for devices with notch/home indicator */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  @media (max-width: 768px) {
+    .game-bottom-controls {
+      padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    }
   }
 }

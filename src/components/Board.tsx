@@ -1,7 +1,9 @@
-import React, { useMemo } from 'react';
-import type { Board as BoardType, PlayerId, BoardConfig } from '../engine/types.ts';
+import React, { useMemo, useState, useEffect } from 'react';
+import type { Board as BoardType, PlayerId, BoardConfig, PlayerConfig, GameMode } from '../engine/types.ts';
+import { EMPTY_CELL } from '../engine/types.ts';
 import { getWinningCells } from '../engine/winDetection.ts';
 import { Cell } from './Cell.tsx';
+import { PiecePatternDefs } from './PiecePatternDefs.tsx';
 
 interface BoardProps {
   board: BoardType;
@@ -9,12 +11,39 @@ interface BoardProps {
   blocked: boolean[][];
   winner: PlayerId | null;
   lastMove: { row: number; col: number } | null;
+  players: PlayerConfig[];
   onColumnClick: (col: number) => void;
+  mode: GameMode;
+  currentPlayerColor: string;
+  gameActive: boolean;
+  shakeColumn: number | null;
 }
 
 export const Board: React.FC<BoardProps> = React.memo(function Board({
-  board, config, blocked, winner, lastMove, onColumnClick,
+  board, config, blocked, winner, lastMove, players, onColumnClick, mode, currentPlayerColor, gameActive, shakeColumn,
 }) {
+  const [hoveredCol, setHoveredCol] = useState<number | null>(null);
+  const [droppingCell, setDroppingCell] = useState<{ row: number; col: number } | null>(null);
+
+  useEffect(() => {
+    if (lastMove) {
+      setDroppingCell({ row: lastMove.row, col: lastMove.col });
+      const timer = setTimeout(() => setDroppingCell(null), 280);
+      return () => clearTimeout(timer);
+    }
+  }, [lastMove]);
+  const playerColors = useMemo(() => {
+    const map: Record<number, string> = {};
+    players.forEach(p => { map[p.id] = p.color; });
+    return map;
+  }, [players]);
+
+  const playerOutlineColors = useMemo(() => {
+    const map: Record<number, string> = {};
+    players.forEach(p => { map[p.id] = p.outlineColor ?? p.color; });
+    return map;
+  }, [players]);
+
   const winningSet = useMemo(() => {
     if (!winner || !lastMove) return new Set<string>();
     const cells = getWinningCells(board, lastMove.row, lastMove.col, config.connectN);
@@ -24,35 +53,80 @@ export const Board: React.FC<BoardProps> = React.memo(function Board({
 
   return (
     <div
-      className="board"
-      role="grid"
-      aria-label="Game board"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${config.cols}, 1fr)`,
-        gap: '6px',
-        padding: '16px',
-        backgroundColor: '#17171F',
-        borderRadius: '20px',
-        maxWidth: '560px',
-        width: '100%',
-        margin: '0 auto',
-        boxShadow: '0 8px 32px rgba(23,23,31,0.3)',
-      }}
+      onMouseLeave={() => setHoveredCol(null)}
+      style={{ maxWidth: '560px', width: '100%', margin: '0 auto' }}
     >
-      {board.map((row, rowIdx) =>
-        row.map((cell, colIdx) => (
-          <Cell
-            key={`${rowIdx}-${colIdx}`}
-            value={cell}
-            row={rowIdx}
-            col={colIdx}
-            blocked={blocked[rowIdx]?.[colIdx] ?? false}
-            isWinning={winningSet.has(`${rowIdx},${colIdx}`)}
-            onClick={onColumnClick}
-          />
-        ))
+      {/* Ghost piece preview row */}
+      {gameActive && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${config.cols}, 1fr)`,
+          gap: '6px',
+          padding: '0 16px',
+          height: '48px',
+        }}>
+          {Array.from({ length: config.cols }, (_, colIdx) => (
+            <div key={colIdx} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {hoveredCol === colIdx && (
+                <div className="ghost-piece" style={{
+                  width: '70%', height: '70%', borderRadius: '50%',
+                  backgroundColor: currentPlayerColor,
+                  opacity: 0.4,
+                }} />
+              )}
+            </div>
+          ))}
+        </div>
       )}
+      <div
+        key={mode}
+        className="board"
+        role="grid"
+        aria-label="Game board"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${config.cols}, 1fr)`,
+          gap: '6px',
+          padding: '16px',
+          backgroundColor: mode === 'classic' ? '#D6D6F5' : '#8B7FC7',
+          borderRadius: '20px',
+          width: '100%',
+          boxShadow: mode === 'classic'
+            ? '0 8px 32px rgba(180,180,220,0.4), inset 0 2px 12px rgba(0,0,0,0.4)'
+            : '0 8px 32px rgba(100,80,160,0.4), inset 0 2px 12px rgba(0,0,0,0.4)',
+          position: 'relative',
+          animation: 'boardFlipIn 0.4s ease-out',
+          willChange: 'transform',
+          transformStyle: 'preserve-3d',
+        }}
+      >
+        <PiecePatternDefs />
+        {board.map((row, rowIdx) =>
+          row.map((cell, colIdx) => {
+            const player = cell !== EMPTY_CELL ? players.find(p => p.id === cell) : undefined;
+            return (
+              <Cell
+                key={`${rowIdx}-${colIdx}`}
+                value={cell}
+                row={rowIdx}
+                col={colIdx}
+                blocked={blocked[rowIdx]?.[colIdx] ?? false}
+                isWinning={winningSet.has(`${rowIdx},${colIdx}`)}
+                isDropping={droppingCell?.row === rowIdx && droppingCell?.col === colIdx}
+                dropDistance={droppingCell?.row === rowIdx && droppingCell?.col === colIdx ? rowIdx + 1 : undefined}
+                isShaking={shakeColumn === colIdx}
+                playerColors={playerColors}
+                playerOutlineColors={playerOutlineColors}
+                pattern={player?.pattern}
+                onClick={onColumnClick}
+                onMouseEnter={() => { if (gameActive) setHoveredCol(colIdx); }}
+              />
+            );
+          })
+        )}
+      </div>
     </div>
   );
 });

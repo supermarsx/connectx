@@ -7,25 +7,46 @@ import type {
   GameState, GameConfig, GamePhase, PlayerId, RoundResult,
 } from '../engine/types.ts';
 import {
-  DEFAULT_BOARD_CONFIG, PLAYER_COLORS,
+  DEFAULT_BOARD_CONFIG, PLAYER_COLORS, PLAYER_OUTLINE_COLORS, PIECE_PATTERNS, DEFAULT_AVATARS,
 } from '../engine/types.ts';
 import {
   createBoard, createBlockedGrid, dropPiece, isBoardFull,
   generateBlockedCells, getValidMoves,
 } from '../engine/board.ts';
-import { checkWinAtPosition } from '../engine/winDetection.ts';
+import { checkWinAtPosition, calculateRoundBonus } from '../engine/winDetection.ts';
 import { getBotMove } from '../engine/bot.ts';
+import { useProfileStore } from './profileStore.ts';
+
+/** Fisher-Yates shuffle (returns a new array) */
+function shuffleArray<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
 
 function createDefaultConfig(): GameConfig {
+  const profile = useProfileStore.getState();
+  const p1Name = profile.username || 'Player 1';
+  const p1Color = profile.favoriteColor || PLAYER_COLORS[0];
+  // If p1's color matches p2's default, swap p2 to p1's original default
+  const p2Color = p1Color === PLAYER_COLORS[1] ? PLAYER_COLORS[0] : PLAYER_COLORS[1];
   return {
     board: { ...DEFAULT_BOARD_CONFIG },
     mode: 'classic',
     matchType: 'local',
     players: [
-      { id: 1, name: 'Player 1', type: 'human', color: PLAYER_COLORS[0] },
-      { id: 2, name: 'Player 2', type: 'human', color: PLAYER_COLORS[1] },
+      { id: 1, name: p1Name, type: 'human', color: p1Color, outlineColor: PLAYER_OUTLINE_COLORS[0], pattern: PIECE_PATTERNS[0], avatar: DEFAULT_AVATARS[0] },
+      { id: 2, name: 'Player 2', type: 'human', color: p2Color, outlineColor: PLAYER_OUTLINE_COLORS[1], pattern: PIECE_PATTERNS[1], avatar: DEFAULT_AVATARS[1] },
     ],
     totalRounds: 3,
+    matchWinCondition: 'fixed-rounds',
+    winsRequired: 3,
+    fullBoardResetInterval: 0,
+    turnOrder: 'rotate',
+    randomizeTurnOrder: false,
   };
 }
 
@@ -86,19 +107,29 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   startMatch: () => {
     const { config } = get();
+    // Safety net: ensure every player has a pattern assigned
+    const patchedPlayers = config.players.map((p, i) => ({
+      ...p,
+      pattern: p.pattern ?? PIECE_PATTERNS[i % PIECE_PATTERNS.length],
+    }));
+    const patchedConfig = { ...config, players: patchedPlayers };
+    const matchConfig = patchedConfig.randomizeTurnOrder
+      ? { ...patchedConfig, players: shuffleArray(patchedConfig.players) }
+      : patchedConfig;
     const scores: Record<PlayerId, number> = {};
-    config.players.forEach(p => { scores[p.id] = 0; });
+    matchConfig.players.forEach(p => { scores[p.id] = 0; });
 
     set({
       phase: 'playing',
-      board: createBoard(config.board),
+      config: matchConfig,
+      board: createBoard(matchConfig.board),
       currentPlayerIndex: 0,
       round: 1,
       scores,
       roundResults: [],
       winner: null,
       isDraw: false,
-      blockedCells: createBlockedGrid(config.board),
+      blockedCells: createBlockedGrid(matchConfig.board),
       moveHistory: [],
     });
   },
@@ -132,9 +163,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const newScores = { ...state.scores };
       if (winner) {
         newScores[winner] = (newScores[winner] || 0) + 1;
+        const bonus = calculateRoundBonus(
+          result.board, result.row, col,
+          state.config.board.connectN,
+          state.roundResults, winner
+        );
+        newScores[winner] += bonus;
       }
 
-      const isMatchOver = state.round >= state.config.totalRounds;
+      let isMatchOver = state.round >= state.config.totalRounds;
+      if (state.config.matchWinCondition === 'first-to-n' && winner) {
+        if (newScores[winner] >= state.config.winsRequired) {
+          isMatchOver = true;
+        }
+      }
 
       set({
         board: result.board,
@@ -145,6 +187,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
         phase: isMatchOver ? 'matchEnd' : 'roundEnd',
         moveHistory: [...state.moveHistory, moveEntry],
       });
+
+      if (isMatchOver) {
+        const p1 = state.config.players[0];
+        if (p1.type === 'human') {
+          const p1Won = winner === p1.id;
+          useProfileStore.getState().recordGameResult(p1Won);
+        }
+      }
     } else {
       // Continue playing — advance to next player
       const nextPlayerIndex =
@@ -160,15 +210,40 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   nextRound: () => {
     const state = get();
-    const blocked = state.config.mode === 'fullboard'
-      ? generateBlockedCells(state.board)
-      : createBlockedGrid(state.config.board);
+    const nextRoundNumber = state.round + 1;
+
+    let blocked: boolean[][];
+    if (state.config.mode === 'fullboard') {
+      const interval = state.config.fullBoardResetInterval;
+      const shouldReset = interval > 0 && (state.round % interval === 0);
+      blocked = shouldReset
+        ? createBlockedGrid(state.config.board)
+        : generateBlockedCells(state.board);
+    } else {
+      blocked = createBlockedGrid(state.config.board);
+    }
+
+    const playerCount = state.config.players.length;
+    let startIndex = 0;
+
+    if (state.config.turnOrder === 'rotate') {
+      startIndex = state.round % playerCount;
+    } else if (state.config.turnOrder === 'fairness') {
+      let fewestWins = Infinity;
+      for (let i = 0; i < playerCount; i++) {
+        const wins = state.scores[state.config.players[i].id] || 0;
+        if (wins < fewestWins) {
+          fewestWins = wins;
+          startIndex = i;
+        }
+      }
+    }
 
     set({
       phase: 'playing',
       board: createBoard(state.config.board),
-      currentPlayerIndex: 0,
-      round: state.round + 1,
+      currentPlayerIndex: startIndex,
+      round: nextRoundNumber,
       winner: null,
       isDraw: false,
       blockedCells: blocked,
