@@ -326,12 +326,9 @@ export function registerHandlers(socket: TypedSocket, io: TypedServer): void {
       if (!channelId) return;
 
       // Broadcast emote to other participants in the room/match
-      socket.to(channelId).emit("error", {
-        code: "EMOTE",
-        message: JSON.stringify({
-          playerId: user.id,
-          emoteId: data.emoteId,
-        }),
+      socket.to(channelId).emit("chat_emote", {
+        playerId: user.id,
+        emoteId: data.emoteId,
       });
     } catch (err) {
       console.error("[ws] Error broadcasting emote:", err);

@@ -144,6 +144,45 @@ export class MatchManager {
 
   // ── Public API ──
 
+  /** Recover active matches from Redis after a server restart. */
+  async recoverMatchesFromRedis(): Promise<number> {
+    let recovered = 0;
+    try {
+      const keys = await redis.keys("connectx:match:*");
+      for (const key of keys) {
+        const raw = await redis.get(key);
+        if (!raw) continue;
+        try {
+          const data = JSON.parse(raw);
+          if (data.status === "finished") continue;
+
+          const match: OnlineMatch = {
+            ...data,
+            disconnectedPlayers: new Set(data.disconnectedPlayers ?? []),
+            rematchVotes: new Set(data.rematchVotes ?? []),
+          };
+
+          this.matches.set(match.matchId, match);
+          for (const p of match.players) {
+            this.userMatchIndex.set(p.userId, match.matchId);
+          }
+          if (match.status === "active") {
+            this.startTurnTimer(match.matchId);
+          }
+          recovered++;
+        } catch {
+          console.error(`[matchManager] Failed to parse match from key ${key}`);
+        }
+      }
+      if (recovered > 0) {
+        console.log(`[matchManager] Recovered ${recovered} match(es) from Redis`);
+      }
+    } catch (err) {
+      console.error("[matchManager] Redis recovery failed:", err);
+    }
+    return recovered;
+  }
+
   createMatch(
     players: MatchedPlayerInput[],
     config: OnlineMatch["config"],

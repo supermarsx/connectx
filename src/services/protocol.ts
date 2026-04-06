@@ -129,5 +129,7 @@ export interface ServerToClientEvents {
 
   player_reconnected: (data: { playerId: string }) => void;
 
+  chat_emote: (data: { playerId: string; emoteId: string }) => void;
+
   error: (data: { code: string; message: string }) => void;
 }

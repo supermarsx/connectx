@@ -26,7 +26,7 @@ export class WebSocketService {
       'room_created', 'room_update', 'room_closed',
       'color_rejected', 'match_started', 'state_update',
       'move_rejected', 'round_end', 'match_end',
-      'player_disconnected', 'player_reconnected', 'error',
+      'player_disconnected', 'player_reconnected', 'chat_emote', 'error',
     ];
 
     for (const event of serverEvents) {

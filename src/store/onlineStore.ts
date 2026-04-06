@@ -3,6 +3,7 @@ import { api, getToken, setToken, clearToken } from '../services/api.ts';
 import type { User } from '../services/api.ts';
 import { wsService } from '../services/ws.ts';
 import type { PlayerInfo, MatchConfig, RoomConfig } from '../services/protocol.ts';
+import { dropPiece } from '../engine/board.ts';
 
 export type OnlinePhase =
   | 'auth' | 'menu' | 'quickplay-queue' | 'room-browser'
@@ -246,6 +247,11 @@ export const useOnlineStore = create<OnlineStore>((set, get) => {
     wsService.on('error', (data: { code: string; message: string }) => {
       console.error(`[Online] ${data.code}: ${data.message}`);
     });
+
+    wsService.on('chat_emote', (data: { playerId: string; emoteId: string }) => {
+      // Emote display is handled by UI components listening to this event
+      console.log(`[Online] Emote from ${data.playerId}: ${data.emoteId}`);
+    });
   }
 
   let eventsWired = false;
@@ -362,6 +368,24 @@ export const useOnlineStore = create<OnlineStore>((set, get) => {
     },
 
     submitMove(col) {
+      // Optimistic local update: apply move immediately for responsive feel
+      const match = get().onlineMatch;
+      if (match) {
+        const playerIndex = match.players.findIndex(p => p.id === match.myPlayerId);
+        if (playerIndex !== -1) {
+          const enginePlayerId = playerIndex + 1;
+          const result = dropPiece(match.board, col, enginePlayerId);
+          if (result) {
+            set({
+              onlineMatch: {
+                ...match,
+                board: result.board,
+                lastMove: { row: result.row, col, playerId: match.myPlayerId },
+              },
+            });
+          }
+        }
+      }
       wsService.submitMove({ col });
     },
 
