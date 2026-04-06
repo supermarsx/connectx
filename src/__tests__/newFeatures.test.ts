@@ -117,6 +117,7 @@ describe('Turn order rotation logic', () => {
       // 'fixed' mode: starting player is always index 0
       const startingPlayerIndex = 0;
       for (const round of [0, 1, 2, 5, 10]) {
+        expect(round).toBeGreaterThanOrEqual(0);
         expect(startingPlayerIndex).toBe(0);
       }
     });
