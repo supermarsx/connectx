@@ -26,6 +26,7 @@ export const GameScreen: React.FC = () => {
 
   const muted = useSettingsStore(s => s.muted);
   const toggleMute = useSettingsStore(s => s.toggleMute);
+  const colorblindPatterns = useSettingsStore(s => s.colorblindPatterns);
 
   const currentPlayer = config.players[currentPlayerIndex];
   const lastMove = moveHistory.length > 0 ? moveHistory[moveHistory.length - 1] : null;
@@ -281,6 +282,7 @@ export const GameScreen: React.FC = () => {
         currentPlayerColor={currentPlayer?.color ?? '#ccc'}
         gameActive={phase === 'playing' && currentPlayer?.type !== 'bot'}
         shakeColumn={shakeColumn}
+        forceColorblindPatterns={colorblindPatterns}
       />
 
       {/* Bottom controls — fixed on mobile */}

@@ -106,7 +106,9 @@ function hardBot(
   config: BoardConfig,
   blocked?: boolean[][],
 ): number {
-  const depth = 6;
+  // Scale depth based on board size: smaller boards get deeper search
+  const totalCells = config.rows * config.cols;
+  const depth = totalCells <= 42 ? 6 : totalCells <= 72 ? 4 : 3;
   let bestScore = -Infinity;
   let bestCol = validMoves[0];
 

@@ -15,6 +15,8 @@ export const SettingsScreen: React.FC = () => {
   const toggleHighContrast = useSettingsStore(s => s.toggleHighContrast);
   const reduceMotion = useSettingsStore(s => s.reduceMotion);
   const toggleReduceMotion = useSettingsStore(s => s.toggleReduceMotion);
+  const colorblindPatterns = useSettingsStore(s => s.colorblindPatterns);
+  const toggleColorblindPatterns = useSettingsStore(s => s.toggleColorblindPatterns);
 
   const favoriteColor = useProfileStore(s => s.favoriteColor);
   const setFavoriteColor = useProfileStore(s => s.setFavoriteColor);
@@ -55,6 +57,7 @@ export const SettingsScreen: React.FC = () => {
       {/* Accessibility */}
       <Section title="Accessibility">
         <ToggleRow label="High Contrast" checked={highContrast} onToggle={toggleHighContrast} />
+        <ToggleRow label="Colorblind Patterns" checked={colorblindPatterns} onToggle={toggleColorblindPatterns} />
         <ToggleRow label="Reduce Motion" checked={reduceMotion} onToggle={toggleReduceMotion} />
       </Section>
 

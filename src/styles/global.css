@@ -121,7 +121,7 @@ button:not(:disabled):active {
 }
 
 .cell-error {
-  animation: shake 0.3s ease;
+  animation: shake 0.12s ease;
   box-shadow: 0 0 8px var(--color-error) !important;
 }
 
@@ -141,7 +141,7 @@ button:not(:disabled):active {
 }
 
 .cell-shake {
-  animation: shake 0.3s ease;
+  animation: shake 0.12s ease;
 }
 
 .cell-success {

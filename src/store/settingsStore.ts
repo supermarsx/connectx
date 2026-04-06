@@ -6,6 +6,7 @@ const REDUCE_MOTION_KEY = 'connectx-reduceMotion';
 const MUTED_KEY = 'connectx-muted';
 const VOLUME_KEY = 'connectx-volume';
 const TEXT_SIZE_KEY = 'connectx-textSize';
+const COLORBLIND_KEY = 'connectx-colorblindPatterns';
 
 function getInitialReduceMotion(): boolean {
   const stored = localStorage.getItem(REDUCE_MOTION_KEY);
@@ -16,11 +17,13 @@ function getInitialReduceMotion(): boolean {
 interface SettingsState {
   highContrast: boolean;
   reduceMotion: boolean;
+  colorblindPatterns: boolean;
   muted: boolean;
   volume: number; // 0-1
   textSize: number; // 0 = default, 1 = +1 step, 2 = +2 steps
   toggleHighContrast: () => void;
   toggleReduceMotion: () => void;
+  toggleColorblindPatterns: () => void;
   toggleMute: () => void;
   setVolume: (v: number) => void;
   increaseTextSize: () => void;
@@ -30,6 +33,7 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>((set) => ({
   highContrast: localStorage.getItem(STORAGE_KEY) === 'true',
   reduceMotion: getInitialReduceMotion(),
+  colorblindPatterns: localStorage.getItem(COLORBLIND_KEY) === 'true',
   muted: localStorage.getItem(MUTED_KEY) === 'true',
   volume: parseFloat(localStorage.getItem(VOLUME_KEY) ?? '0.5'),
   textSize: Math.min(2, Math.max(0, parseInt(localStorage.getItem(TEXT_SIZE_KEY) ?? '0', 10) || 0)),
@@ -44,6 +48,12 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const next = !state.reduceMotion;
       localStorage.setItem(REDUCE_MOTION_KEY, String(next));
       return { reduceMotion: next };
+    }),
+  toggleColorblindPatterns: () =>
+    set((state) => {
+      const next = !state.colorblindPatterns;
+      localStorage.setItem(COLORBLIND_KEY, String(next));
+      return { colorblindPatterns: next };
     }),
   toggleMute: () =>
     set((state) => {

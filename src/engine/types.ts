@@ -22,7 +22,7 @@ export type GameMode = 'classic' | 'fullboard';
 export type MatchType = 'local' | 'quickplay' | 'custom';
 
 /** Match win condition */
-export type MatchWinCondition = 'fixed-rounds' | 'first-to-n';
+export type MatchWinCondition = 'fixed-rounds' | 'first-to-n' | 'up-to-brim';
 
 /** Bot difficulty levels */
 export type BotDifficulty = 'easy' | 'medium' | 'hard';
@@ -110,6 +110,16 @@ export interface GameState {
   blockedCells: boolean[][]; // for fullboard mode
   moveHistory: Array<{ row: number; col: number; player: PlayerId }>;
 }
+
+
+/** Board size presets */
+export const BOARD_SIZE_PRESETS = [
+  { key: 'small', label: 'Small', rows: 6, cols: 7, connectN: 4 },
+  { key: 'medium', label: 'Medium', rows: 8, cols: 9, connectN: 5 },
+  { key: 'big', label: 'Big', rows: 10, cols: 12, connectN: 6 },
+  { key: 'epic', label: 'Epic', rows: 14, cols: 16, connectN: 7 },
+  { key: 'custom', label: 'Custom', rows: 6, cols: 7, connectN: 4 },
+];
 
 /** Default board configuration (standard Connect 4) */
 export const DEFAULT_BOARD_CONFIG: BoardConfig = {

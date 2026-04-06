@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useOnlineStore } from '../store/onlineStore.ts';
+import { useSettingsStore } from '../store/settingsStore.ts';
 import { Board } from './Board.tsx';
 import type { PlayerConfig, BoardConfig } from '../engine/types.ts';
 
@@ -11,6 +12,7 @@ export const OnlineGameScreen: React.FC = () => {
   const submitMove = useOnlineStore(s => s.submitMove);
   const requestRematch = useOnlineStore(s => s.requestRematch);
   const setOnlinePhase = useOnlineStore(s => s.setOnlinePhase);
+  const colorblindPatterns = useSettingsStore(s => s.colorblindPatterns);
 
   const [shakeColumn, setShakeColumn] = useState<number | null>(null);
   const [activeEmote, setActiveEmote] = useState<string | null>(null);
@@ -270,6 +272,7 @@ export const OnlineGameScreen: React.FC = () => {
           currentPlayerColor={currentPlayerColor}
           gameActive={isMyTurn && !isRoundOver}
           shakeColumn={shakeColumn}
+          forceColorblindPatterns={colorblindPatterns}
         />
 
         {/* Bottom controls */}

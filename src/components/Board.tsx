@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import type { Board as BoardType, PlayerId, BoardConfig, PlayerConfig, GameMode } from '../engine/types.ts';
-import { EMPTY_CELL } from '../engine/types.ts';
+import { EMPTY_CELL, PIECE_PATTERNS } from '../engine/types.ts';
 import { getWinningCells } from '../engine/winDetection.ts';
 import { Cell } from './Cell.tsx';
 import { PiecePatternDefs } from './PiecePatternDefs.tsx';
@@ -17,10 +17,11 @@ interface BoardProps {
   currentPlayerColor: string;
   gameActive: boolean;
   shakeColumn: number | null;
+  forceColorblindPatterns?: boolean;
 }
 
 export const Board: React.FC<BoardProps> = React.memo(function Board({
-  board, config, blocked, winner, lastMove, players, onColumnClick, mode, currentPlayerColor, gameActive, shakeColumn,
+  board, config, blocked, winner, lastMove, players, onColumnClick, mode, currentPlayerColor, gameActive, shakeColumn, forceColorblindPatterns,
 }) {
   const [hoveredCol, setHoveredCol] = useState<number | null>(null);
   const [droppingCell, setDroppingCell] = useState<{ row: number; col: number } | null>(null);
@@ -119,7 +120,7 @@ export const Board: React.FC<BoardProps> = React.memo(function Board({
                 isShaking={shakeColumn === colIdx}
                 playerColors={playerColors}
                 playerOutlineColors={playerOutlineColors}
-                pattern={player?.pattern}
+                pattern={forceColorblindPatterns ? (PIECE_PATTERNS[(player?.id ?? 1) - 1] ?? 'solid') : player?.pattern}
                 onClick={onColumnClick}
                 onMouseEnter={() => { if (gameActive) setHoveredCol(colIdx); }}
               />

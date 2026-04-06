@@ -1,6 +1,6 @@
 import React from 'react';
 import type { PlayerConfig, GameMode, BotDifficulty, PlayerAvatar } from '../engine/types.ts';
-import { PLAYER_COLORS, PLAYER_OUTLINE_COLORS, PIECE_PATTERNS, PIECE_COLOR_PALETTE, PLAYER_AVATARS, DEFAULT_AVATARS, HIGH_CONTRAST_COLORS } from '../engine/types.ts';
+import { PLAYER_COLORS, PLAYER_OUTLINE_COLORS, PIECE_PATTERNS, PIECE_COLOR_PALETTE, PLAYER_AVATARS, DEFAULT_AVATARS, HIGH_CONTRAST_COLORS, BOARD_SIZE_PRESETS } from '../engine/types.ts';
 import { useGameStore } from '../store/gameStore.ts';
 import { useProfileStore } from '../store/profileStore.ts';
 import { useSettingsStore } from '../store/settingsStore.ts';
@@ -94,6 +94,7 @@ const BoardPreview: React.FC<{
   );
 };
 
+
 export const LobbyScreen: React.FC = () => {
   const config = useGameStore(s => s.config);
   const updateConfig = useGameStore(s => s.updateConfig);
@@ -107,6 +108,39 @@ export const LobbyScreen: React.FC = () => {
   const textSize = useSettingsStore(s => s.textSize);
   const increaseTextSize = useSettingsStore(s => s.increaseTextSize);
   const decreaseTextSize = useSettingsStore(s => s.decreaseTextSize);
+
+  // Board size selection state
+  const [boardSizeKey, setBoardSizeKey] = React.useState(() => {
+    const found = BOARD_SIZE_PRESETS.find(p =>
+      p.rows === config.board.rows && p.cols === config.board.cols && p.connectN === config.board.connectN
+    );
+    return found ? found.key : 'custom';
+  });
+  const [customRows, setCustomRows] = React.useState(config.board.rows);
+  const [customCols, setCustomCols] = React.useState(config.board.cols);
+  const [customConnectN, setCustomConnectN] = React.useState(config.board.connectN);
+
+  const handleBoardSizePreset = (key: string) => {
+    setBoardSizeKey(key);
+    const preset = BOARD_SIZE_PRESETS.find(p => p.key === key);
+    if (preset && key !== 'custom') {
+      updateConfig({ board: { rows: preset.rows, cols: preset.cols, connectN: preset.connectN } });
+      setCustomRows(preset.rows);
+      setCustomCols(preset.cols);
+      setCustomConnectN(preset.connectN);
+    }
+  };
+  const handleCustomChange = (field: 'rows' | 'cols' | 'connectN', value: number) => {
+    let rows = customRows, cols = customCols, connectN = customConnectN;
+    if (field === 'rows') rows = value;
+    if (field === 'cols') cols = value;
+    if (field === 'connectN') connectN = value;
+    setCustomRows(rows);
+    setCustomCols(cols);
+    setCustomConnectN(connectN);
+    setBoardSizeKey('custom');
+    updateConfig({ board: { rows, cols, connectN } });
+  };
 
   const handleToggleHighContrast = () => {
     toggleHighContrast();
@@ -200,18 +234,59 @@ export const LobbyScreen: React.FC = () => {
 
       {/* Board size */}
       <div className="setting-card" style={cardStyle}>
-        <label style={labelStyle}>Connect N</label>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {[4, 5, 6].map(n => (
+        <label style={labelStyle}>Board Size</label>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {BOARD_SIZE_PRESETS.filter(p => p.key !== 'custom').map(preset => (
             <button
-              key={n}
-              onClick={() => updateConfig({ board: { ...config.board, connectN: n } })}
-              style={pillStyle(config.board.connectN === n)}
+              key={preset.key}
+              onClick={() => handleBoardSizePreset(preset.key)}
+              style={pillStyle(boardSizeKey === preset.key)}
             >
-              {n}
+              {preset.label}
             </button>
           ))}
+          <button
+            key="custom"
+            onClick={() => handleBoardSizePreset('custom')}
+            style={pillStyle(boardSizeKey === 'custom')}
+          >
+            Custom
+          </button>
         </div>
+        {boardSizeKey === 'custom' && (
+          <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600 }}>Rows
+              <input
+                type="number"
+                min={4}
+                max={20}
+                value={customRows}
+                onChange={e => handleCustomChange('rows', Math.max(4, Math.min(20, Number(e.target.value))))}
+                style={{ width: 48, marginLeft: 4, fontWeight: 600, border: '1px solid #ccc', borderRadius: 6, padding: '2px 6px' }}
+              />
+            </label>
+            <label style={{ fontSize: '13px', fontWeight: 600 }}>Cols
+              <input
+                type="number"
+                min={4}
+                max={20}
+                value={customCols}
+                onChange={e => handleCustomChange('cols', Math.max(4, Math.min(20, Number(e.target.value))))}
+                style={{ width: 48, marginLeft: 4, fontWeight: 600, border: '1px solid #ccc', borderRadius: 6, padding: '2px 6px' }}
+              />
+            </label>
+            <label style={{ fontSize: '13px', fontWeight: 600 }}>Connect
+              <input
+                type="number"
+                min={3}
+                max={Math.max(customRows, customCols)}
+                value={customConnectN}
+                onChange={e => handleCustomChange('connectN', Math.max(3, Math.min(Math.max(customRows, customCols), Number(e.target.value))))}
+                style={{ width: 48, marginLeft: 4, fontWeight: 600, border: '1px solid #ccc', borderRadius: 6, padding: '2px 6px' }}
+              />
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Game mode */}
@@ -233,17 +308,48 @@ export const LobbyScreen: React.FC = () => {
       {/* Rounds */}
       <div className="setting-card" style={cardStyle}>
         <label style={labelStyle}>Rounds</label>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           {[1, 3, 5].map(r => (
             <button
               key={r}
-              onClick={() => updateConfig({ totalRounds: r })}
-              style={pillStyle(config.totalRounds === r)}
+              onClick={() => updateConfig({ totalRounds: r, matchWinCondition: 'fixed-rounds' })}
+              style={pillStyle(config.totalRounds === r && config.matchWinCondition === 'fixed-rounds')}
             >
               {r}
             </button>
           ))}
+          <button
+            key="custom-rounds"
+            onClick={() => updateConfig({ matchWinCondition: 'fixed-rounds' })}
+            style={pillStyle(config.matchWinCondition === 'fixed-rounds' && ![1,3,5].includes(config.totalRounds))}
+          >
+            Custom
+          </button>
+          {config.mode === 'fullboard' && (
+            <button
+              key="up-to-brim"
+              onClick={() => updateConfig({ matchWinCondition: 'up-to-brim' })}
+              style={pillStyle(config.matchWinCondition === 'up-to-brim')}
+            >
+              Up to the Brim
+            </button>
+          )}
+          {config.matchWinCondition === 'fixed-rounds' && ![1,3,5].includes(config.totalRounds) && (
+            <input
+              type="number"
+              min={1}
+              max={99}
+              value={config.totalRounds}
+              onChange={e => updateConfig({ totalRounds: Math.max(1, Math.min(99, Number(e.target.value))) })}
+              style={{ width: 56, marginLeft: 8, fontWeight: 600, border: '1px solid #ccc', borderRadius: 6, padding: '2px 6px' }}
+            />
+          )}
         </div>
+        {config.matchWinCondition === 'up-to-brim' && config.mode === 'fullboard' && (
+          <div style={{ marginTop: 6, fontSize: 13, color: '#6a6a7a' }}>
+            Play until the board is completely filled.
+          </div>
+        )}
       </div>
 
       {/* Player count */}
@@ -318,7 +424,7 @@ export const LobbyScreen: React.FC = () => {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: `0 2px 0 ${darkenColor(player.color)}`,
           }}>
-            <AvatarIcon avatar={player.avatar} size={36} color="#fff" />
+            <AvatarIcon avatar={player.avatar ?? 'cat'} size={36} color="#fff" />
           </div>
 
           {/* Name + human/bot toggle */}

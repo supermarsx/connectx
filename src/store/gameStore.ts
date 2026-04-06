@@ -6,13 +6,8 @@ import { create } from 'zustand';
 import type {
   GameState, GameConfig, GamePhase, PlayerId, RoundResult,
 } from '../engine/types.ts';
-import {
-  DEFAULT_BOARD_CONFIG, PLAYER_COLORS, PLAYER_OUTLINE_COLORS, PIECE_PATTERNS, DEFAULT_AVATARS,
-} from '../engine/types.ts';
-import {
-  createBoard, createBlockedGrid, dropPiece, isBoardFull,
-  generateBlockedCells, getValidMoves,
-} from '../engine/board.ts';
+import { PLAYER_COLORS, PLAYER_OUTLINE_COLORS, PIECE_PATTERNS, DEFAULT_AVATARS, BOARD_SIZE_PRESETS } from '../engine/types.ts';
+import { createBoard, createBlockedGrid, dropPiece, isBoardFull, generateBlockedCells, getValidMoves } from '../engine/board.ts';
 import { checkWinAtPosition, calculateRoundBonus } from '../engine/winDetection.ts';
 import { getBotMove } from '../engine/bot.ts';
 import { useProfileStore } from './profileStore.ts';
@@ -27,14 +22,17 @@ function shuffleArray<T>(arr: T[]): T[] {
   return copy;
 }
 
+
+
 function createDefaultConfig(): GameConfig {
   const profile = useProfileStore.getState();
   const p1Name = profile.username || 'Player 1';
   const p1Color = profile.favoriteColor || PLAYER_COLORS[0];
   // If p1's color matches p2's default, swap p2 to p1's original default
   const p2Color = p1Color === PLAYER_COLORS[1] ? PLAYER_COLORS[0] : PLAYER_COLORS[1];
+  const defaultBoard = BOARD_SIZE_PRESETS[0];
   return {
-    board: { ...DEFAULT_BOARD_CONFIG },
+    board: { rows: defaultBoard.rows, cols: defaultBoard.cols, connectN: defaultBoard.connectN },
     mode: 'classic',
     matchType: 'local',
     players: [
@@ -119,9 +117,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const scores: Record<PlayerId, number> = {};
     matchConfig.players.forEach(p => { scores[p.id] = 0; });
 
+    // If 'up-to-brim' mode, set totalRounds to max possible moves
+    let totalRounds = matchConfig.totalRounds;
+    if (matchConfig.matchWinCondition === 'up-to-brim' && matchConfig.mode === 'fullboard') {
+      totalRounds = matchConfig.board.rows * matchConfig.board.cols;
+    }
+
     set({
       phase: 'playing',
-      config: matchConfig,
+      config: { ...matchConfig, totalRounds },
       board: createBoard(matchConfig.board),
       currentPlayerIndex: 0,
       round: 1,
