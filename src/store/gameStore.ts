@@ -87,6 +87,9 @@ interface GameActions {
   /** Reset back to menu */
   resetToMenu: () => void;
 
+  /** Reset to lobby (keep config, reset match state) */
+  resetToLobby: () => void;
+
   /** Trigger bot move if it's a bot's turn */
   triggerBotMove: () => void;
 }
@@ -177,7 +180,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       let isMatchOver = state.round >= state.config.totalRounds;
       if (state.config.matchWinCondition === 'first-to-n' && winner) {
-        if (newScores[winner] >= state.config.winsRequired) {
+        const roundResults = [...state.roundResults, roundResult];
+        const actualWins = roundResults.filter(r => r.winner === winner).length;
+        if (actualWins >= state.config.winsRequired) {
           isMatchOver = true;
         }
       }
@@ -195,7 +200,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (isMatchOver) {
         const p1 = state.config.players[0];
         if (p1.type === 'human') {
-          const p1Won = winner === p1.id;
+          const p1Score = newScores[p1.id] || 0;
+          const maxOpponentScore = Math.max(
+            ...state.config.players.filter(p => p.id !== p1.id).map(p => newScores[p.id] || 0)
+          );
+          const p1Won = p1Score > maxOpponentScore;
           useProfileStore.getState().recordGameResult(p1Won);
         }
       }
@@ -235,9 +244,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     } else if (state.config.turnOrder === 'fairness') {
       let fewestWins = Infinity;
       for (let i = 0; i < playerCount; i++) {
-        const wins = state.scores[state.config.players[i].id] || 0;
-        if (wins < fewestWins) {
-          fewestWins = wins;
+        const playerId = state.config.players[i].id;
+        const actualWins = state.roundResults.filter(r => r.winner === playerId).length;
+        if (actualWins < fewestWins) {
+          fewestWins = actualWins;
           startIndex = i;
         }
       }
@@ -256,6 +266,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   resetToMenu: () => set(createInitialState()),
+
+  resetToLobby: () => {
+    const { config } = get();
+    const scores: Record<number, number> = {};
+    config.players.forEach(p => { scores[p.id] = 0; });
+    set({
+      phase: 'lobby',
+      board: createBoard(config.board),
+      currentPlayerIndex: 0,
+      round: 1,
+      scores,
+      roundResults: [],
+      winner: null,
+      isDraw: false,
+      blockedCells: createBlockedGrid(config.board),
+      moveHistory: [],
+    });
+  },
 
   triggerBotMove: () => {
     const state = get();
