@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "workspaces": ["shared", "server", "bot-service"],
   "description": "ConnectX — A modern, cross-platform reimagining of Connect 4",
   "scripts": {
     "dev": "vite",
@@ -10,7 +11,15 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "dev:bot": "npm -w bot-service run dev",
+    "test:bot": "npm -w bot-service run test",
+    "test:server": "npm -w server run test",
+    "test:all": "vitest run && npm -w server run test && npm -w bot-service run test",
+    "cap:build": "npm run build && npx cap sync",
+    "cap:android": "npx cap open android",
+    "cap:ios": "npx cap open ios"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -35,6 +44,13 @@
     "typescript-eslint": "^8.48.0",
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.2.0",
-    "vitest": "^3.2.1"
+    "vitest": "^3.2.1",
+    "@playwright/test": "^1.52.0",
+    "@capacitor/cli": "^7.2.0",
+    "@capacitor/core": "^7.2.0",
+    "@capacitor/android": "^7.2.0",
+    "@capacitor/ios": "^7.2.0",
+    "@capacitor/haptics": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0"
   }
 }
