@@ -23,7 +23,7 @@ export const AvatarIcon: React.FC<AvatarIconProps> = ({ avatar, size, color }) =
     width: size,
     height: size,
     borderRadius: '50%',
-    backgroundColor: color ?? '#FAF7FB',
+    backgroundColor: color ?? 'var(--color-neutral-50)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

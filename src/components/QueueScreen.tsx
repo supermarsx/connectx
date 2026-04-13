@@ -32,7 +32,7 @@ export const QueueScreen: React.FC = () => {
       justifyContent: 'center', minHeight: '100vh', gap: '24px', padding: '32px',
     }}>
       <h2 style={{
-        fontSize: '28px', fontWeight: 800, color: '#17171F',
+        fontSize: '28px', fontWeight: 800, color: 'var(--color-neutral-900)',
         fontFamily: 'var(--font-display)', margin: 0,
       }}>
         Quick Play
@@ -41,24 +41,24 @@ export const QueueScreen: React.FC = () => {
       {!searching ? (
         /* Pre-queue preferences */
         <div style={{
-          padding: '24px', borderRadius: '16px', border: '3px solid #17171F',
-          backgroundColor: '#F3ECFF', boxShadow: '5px 5px 0 #17171F',
+          padding: '24px', borderRadius: '16px', border: '3px solid var(--color-neutral-900)',
+          backgroundColor: 'var(--color-bg-card)', boxShadow: '5px 5px 0 var(--color-neutral-900)',
           width: '100%', maxWidth: '340px',
           display: 'flex', flexDirection: 'column', gap: '16px',
         }}>
           <div>
-            <label style={{ fontSize: '13px', fontWeight: 700, color: '#9C9CB1', textTransform: 'uppercase' }}>
+            <label style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-neutral-400)', textTransform: 'uppercase' }}>
               Mode
             </label>
             <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
               {(['classic', 'fullboard'] as const).map(m => (
                 <button key={m} onClick={() => setMode(m)} style={{
                   flex: 1, padding: '10px', borderRadius: '12px',
-                  border: '2px solid #17171F',
-                  backgroundColor: mode === m ? '#64E0C6' : '#FAF7FB',
-                  color: mode === m ? '#fff' : '#17171F',
+                  border: '2px solid var(--color-neutral-900)',
+                  backgroundColor: mode === m ? '#64E0C6' : 'var(--color-neutral-50)',
+                  color: mode === m ? '#fff' : 'var(--color-neutral-900)',
                   fontWeight: 700, fontSize: '14px', cursor: 'pointer',
-                  boxShadow: mode === m ? '3px 3px 0 #17171F' : 'none',
+                  boxShadow: mode === m ? '3px 3px 0 var(--color-neutral-900)' : 'none',
                 }}>
                   {m === 'classic' ? 'Classic' : 'Full Board'}
                 </button>
@@ -67,18 +67,18 @@ export const QueueScreen: React.FC = () => {
           </div>
 
           <div>
-            <label style={{ fontSize: '13px', fontWeight: 700, color: '#9C9CB1', textTransform: 'uppercase' }}>
+            <label style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-neutral-400)', textTransform: 'uppercase' }}>
               Connect N
             </label>
             <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
               {([4, 5, 6] as const).map(n => (
                 <button key={n} onClick={() => setConnectN(n)} style={{
                   flex: 1, padding: '10px', borderRadius: '12px',
-                  border: '2px solid #17171F',
-                  backgroundColor: connectN === n ? '#FFD36B' : '#FAF7FB',
-                  color: connectN === n ? '#fff' : '#17171F',
+                  border: '2px solid var(--color-neutral-900)',
+                  backgroundColor: connectN === n ? '#FFD36B' : 'var(--color-neutral-50)',
+                  color: connectN === n ? '#fff' : 'var(--color-neutral-900)',
                   fontWeight: 700, fontSize: '16px', cursor: 'pointer',
-                  boxShadow: connectN === n ? '3px 3px 0 #17171F' : 'none',
+                  boxShadow: connectN === n ? '3px 3px 0 var(--color-neutral-900)' : 'none',
                 }}>
                   {n}
                 </button>
@@ -88,9 +88,9 @@ export const QueueScreen: React.FC = () => {
 
           <button onClick={handleJoin} style={{
             width: '100%', padding: '14px 24px', borderRadius: '14px',
-            border: '2px solid #17171F', backgroundColor: '#64E0C6',
+            border: '2px solid var(--color-neutral-900)', backgroundColor: '#64E0C6',
             color: '#fff', fontWeight: 700, fontSize: '16px', cursor: 'pointer',
-            boxShadow: '4px 4px 0 #17171F',
+            boxShadow: '4px 4px 0 var(--color-neutral-900)',
           }}>
             Find Match
           </button>
@@ -98,25 +98,29 @@ export const QueueScreen: React.FC = () => {
       ) : (
         /* Searching animation */
         <div style={{
-          padding: '32px 28px', borderRadius: '16px', border: '3px solid #17171F',
-          backgroundColor: '#F3ECFF', boxShadow: '5px 5px 0 #17171F',
+          padding: '32px 28px', borderRadius: '16px', border: '3px solid var(--color-neutral-900)',
+          backgroundColor: 'var(--color-bg-card)', boxShadow: '5px 5px 0 var(--color-neutral-900)',
           width: '100%', maxWidth: '340px', textAlign: 'center',
           display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center',
         }}>
-          <div style={{
-            width: '48px', height: '48px', borderRadius: '50%',
-            border: '4px solid #E0D6E6', borderTopColor: '#64E0C6',
-            animation: 'spin 0.8s linear infinite',
-          }} />
-          <p style={{ fontSize: '18px', fontWeight: 700, color: '#17171F', margin: 0 }}>
+          <div
+            role="progressbar"
+            aria-label="Searching for match"
+            style={{
+              width: '48px', height: '48px', borderRadius: '50%',
+              border: '4px solid var(--color-cell-empty)', borderTopColor: '#64E0C6',
+              animation: 'spin 0.8s linear infinite',
+            }}
+          />
+          <p role="status" aria-live="polite" style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-neutral-900)', margin: 0 }}>
             Searching for players{dots}
           </p>
           {queuePosition > 0 && (
-            <p style={{ fontSize: '14px', color: '#9C9CB1', margin: 0 }}>
+            <p style={{ fontSize: '14px', color: 'var(--color-neutral-400)', margin: 0 }}>
               Queue position: <strong style={{ color: '#64E0C6' }}>{queuePosition}</strong>
             </p>
           )}
-          <div style={{ display: 'flex', gap: '12px', fontSize: '13px', color: '#9C9CB1' }}>
+          <div style={{ display: 'flex', gap: '12px', fontSize: '13px', color: 'var(--color-neutral-400)' }}>
             <span>{mode === 'classic' ? 'Classic' : 'Full Board'}</span>
             <span>·</span>
             <span>Connect {connectN}</span>
@@ -124,10 +128,10 @@ export const QueueScreen: React.FC = () => {
         </div>
       )}
 
-      <button onClick={searching ? leaveQueue : () => useOnlineStore.getState().setOnlinePhase('menu')} style={{
+      <button onClick={searching ? () => { leaveQueue(); setHasJoined(false); } : () => useOnlineStore.getState().setOnlinePhase('menu')} style={{
         padding: '10px 24px', borderRadius: '12px',
-        border: '2px solid #17171F', backgroundColor: '#FAF7FB',
-        color: '#9C9CB1', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
+        border: '2px solid var(--color-neutral-900)', backgroundColor: 'var(--color-neutral-50)',
+        color: 'var(--color-neutral-400)', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
       }}>
         {searching ? 'Cancel Search' : '← Back'}
       </button>

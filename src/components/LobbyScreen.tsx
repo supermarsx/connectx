@@ -5,13 +5,7 @@ import { useGameStore } from '../store/gameStore.ts';
 import { useProfileStore } from '../store/profileStore.ts';
 import { useSettingsStore } from '../store/settingsStore.ts';
 import { AvatarIcon } from './AvatarIcon.tsx';
-
-function darkenColor(hex: string, factor = 0.75): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `#${Math.round(r * factor).toString(16).padStart(2, '0')}${Math.round(g * factor).toString(16).padStart(2, '0')}${Math.round(b * factor).toString(16).padStart(2, '0')}`;
-}
+import { darkenColor } from '../utils/color.ts';
 
 const BoardPreview: React.FC<{
   rows: number;
@@ -56,7 +50,7 @@ const BoardPreview: React.FC<{
       padding: '12px 16px',
     }}>
       <span style={{
-        fontSize: '11px', fontWeight: 700, color: '#9C9CB1',
+        fontSize: '11px', fontWeight: 700, color: 'var(--color-neutral-400)',
         textTransform: 'uppercase', letterSpacing: '0.5px',
       }}>
         {rows} × {cols}
@@ -68,7 +62,7 @@ const BoardPreview: React.FC<{
         backgroundColor: bgColor,
         padding: '6px',
         borderRadius: '8px',
-        border: '2px solid #17171F',
+        border: '2px solid var(--color-neutral-900)',
       }}>
         {Array.from({ length: rows * cols }, (_, i) => {
           const r = Math.floor(i / cols);
@@ -84,7 +78,7 @@ const BoardPreview: React.FC<{
                 background: playerColor
                   ? `radial-gradient(circle at 35% 35%, ${playerColor}ee, ${playerColor})`
                   : 'radial-gradient(circle at 35% 35%, #f0eef5, #ddd8e8)',
-                border: playerColor ? `1.5px solid ${darkenColor(playerColor)}` : '1px solid #c8c0d8',
+                border: playerColor ? `1.5px solid ${darkenColor(playerColor, 0.25)}` : '1px solid #c8c0d8',
               }}
             />
           );
@@ -135,6 +129,7 @@ export const LobbyScreen: React.FC = () => {
     if (field === 'rows') rows = value;
     if (field === 'cols') cols = value;
     if (field === 'connectN') connectN = value;
+    connectN = Math.min(connectN, Math.max(rows, cols));
     setCustomRows(rows);
     setCustomCols(cols);
     setCustomConnectN(connectN);
@@ -154,7 +149,7 @@ export const LobbyScreen: React.FC = () => {
 
   const setPlayerName = (index: number, name: string) => {
     const newPlayers = [...config.players];
-    const sanitized = name.replace(/<[^>]*>/g, '').trim().slice(0, 20);
+    const sanitized = name.replace(/[<>&"']/g, '').trim().slice(0, 20);
     newPlayers[index] = { ...newPlayers[index], name: sanitized };
     updateConfig({ players: newPlayers });
     if (index === 0) {
@@ -176,7 +171,7 @@ export const LobbyScreen: React.FC = () => {
         name: `Player ${i + 1}`,
         type: 'human' as const,
         color,
-        outlineColor: PLAYER_OUTLINE_COLORS[i] ?? darkenColor(color),
+        outlineColor: PLAYER_OUTLINE_COLORS[i] ?? darkenColor(color, 0.25),
         pattern: PIECE_PATTERNS[i],
         avatar: DEFAULT_AVATARS[i],
       };
@@ -196,7 +191,7 @@ export const LobbyScreen: React.FC = () => {
     if (conflictIdx !== -1) {
       newPlayers[conflictIdx] = { ...newPlayers[conflictIdx], color: newPlayers[index].color, outlineColor: newPlayers[index].outlineColor };
     }
-    newPlayers[index] = { ...newPlayers[index], color: newColor, outlineColor: darkenColor(newColor) };
+    newPlayers[index] = { ...newPlayers[index], color: newColor, outlineColor: darkenColor(newColor, 0.25) };
     updateConfig({ players: newPlayers });
   };
 
@@ -222,7 +217,7 @@ export const LobbyScreen: React.FC = () => {
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       gap: '24px', padding: '32px', maxWidth: '480px', margin: '0 auto',
     }}>
-      <h2 style={{ fontSize: '24px', color: '#17171F', margin: 0 }}>Game Setup</h2>
+      <h2 style={{ fontSize: '24px', color: 'var(--color-neutral-900)', margin: 0 }}>Game Setup</h2>
 
       <BoardPreview
         rows={config.board.rows}
@@ -420,9 +415,9 @@ export const LobbyScreen: React.FC = () => {
             width: 52, height: 52,
             borderRadius: '50%',
             backgroundColor: player.color,
-            border: '3px solid #17171F',
+            border: '3px solid var(--color-neutral-900)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: `0 2px 0 ${darkenColor(player.color)}`,
+            boxShadow: `0 2px 0 ${darkenColor(player.color, 0.25)}`,
           }}>
             <AvatarIcon avatar={player.avatar ?? 'cat'} size={36} color="#fff" />
           </div>
@@ -435,7 +430,7 @@ export const LobbyScreen: React.FC = () => {
                 onChange={(e) => setPlayerName(idx, e.target.value)}
                 maxLength={20}
                 style={{
-                  fontWeight: 600, color: '#17171F', fontSize: '16px',
+                  fontWeight: 600, color: 'var(--color-neutral-900)', fontSize: '16px',
                   border: 'none', background: 'transparent', outline: 'none',
                   borderBottom: '2px solid transparent', padding: '2px 0',
                   transition: 'border-color 0.15s ease', width: '140px',
@@ -445,7 +440,7 @@ export const LobbyScreen: React.FC = () => {
                 onBlur={(e) => { e.currentTarget.style.borderBottomColor = 'transparent'; }}
               />
             ) : (
-              <span style={{ fontWeight: 600, color: '#17171F' }}>{player.name}</span>
+              <span style={{ fontWeight: 600, color: 'var(--color-neutral-900)' }}>{player.name}</span>
             )}
             <button onClick={() => toggleBot(idx)} style={pillStyle(false)}>
               {player.type === 'human' ? '👤 Human' : '🤖 Bot'}
@@ -458,10 +453,11 @@ export const LobbyScreen: React.FC = () => {
               <button
                 key={av}
                 onClick={() => setPlayerAvatar(idx, av)}
+                aria-label={`Select ${av} avatar`}
                 style={{
                   width: 32, height: 32, padding: 0,
                   borderRadius: '50%',
-                  border: player.avatar === av ? '3px solid #17171F' : '2px solid transparent',
+                  border: player.avatar === av ? '3px solid var(--color-neutral-900)' : '2px solid transparent',
                   backgroundColor: 'transparent',
                   cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -487,7 +483,7 @@ export const LobbyScreen: React.FC = () => {
                     width: '24px',
                     height: '24px',
                     borderRadius: '50%',
-                    border: isSelected ? '3px solid #17171F' : '2px solid #17171F',
+                    border: isSelected ? '3px solid var(--color-neutral-900)' : '2px solid var(--color-neutral-900)',
                     backgroundColor: color,
                     cursor: takenByOther ? 'not-allowed' : 'pointer',
                     opacity: takenByOther ? 0.35 : 1,
@@ -496,7 +492,7 @@ export const LobbyScreen: React.FC = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     padding: 0,
-                    boxShadow: isSelected ? '0 0 0 2px #fff, 0 0 0 4px #17171F' : 'none',
+                    boxShadow: isSelected ? '0 0 0 2px #fff, 0 0 0 4px var(--color-neutral-900)' : 'none',
                     transition: 'all 0.15s ease',
                   }}
                 >
@@ -504,7 +500,7 @@ export const LobbyScreen: React.FC = () => {
                     <span style={{
                       fontSize: '10px',
                       fontWeight: 700,
-                      color: '#17171F',
+                      color: 'var(--color-neutral-900)',
                       lineHeight: 1,
                       pointerEvents: 'none' as const,
                     }}>✕</span>
@@ -547,18 +543,18 @@ export const LobbyScreen: React.FC = () => {
 const cardStyle: React.CSSProperties = {
   width: '100%',
   padding: '16px 20px',
-  backgroundColor: 'rgba(243,236,255,0.92)',
+  backgroundColor: 'var(--color-bg-surface)',
   backdropFilter: 'blur(8px)',
   borderRadius: '16px',
-  border: '2px solid #17171F',
-  boxShadow: '4px 4px 0 #17171F',
+  border: '2px solid var(--color-neutral-900)',
+  boxShadow: '4px 4px 0 var(--color-neutral-900)',
 };
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: '14px',
   fontWeight: 700,
-  color: '#9C9CB1',
+  color: 'var(--color-neutral-400)',
   textTransform: 'uppercase',
   letterSpacing: '0.5px',
   marginBottom: '8px',
@@ -568,9 +564,9 @@ function pillStyle(active: boolean): React.CSSProperties {
   return {
     padding: '8px 16px',
     borderRadius: '24px',
-    border: '2px solid #17171F',
-    backgroundColor: active ? '#FF6FAF' : '#FAF7FB',
-    color: active ? '#fff' : '#17171F',
+    border: '2px solid var(--color-neutral-900)',
+    backgroundColor: active ? '#FF6FAF' : 'var(--color-neutral-50)',
+    color: active ? '#fff' : 'var(--color-neutral-900)',
     fontWeight: 600,
     fontSize: '14px',
     cursor: 'pointer',
@@ -586,23 +582,23 @@ function pillStyle(active: boolean): React.CSSProperties {
 const primaryBtnStyle: React.CSSProperties = {
   padding: '14px 32px',
   borderRadius: '16px',
-  border: '2px solid #17171F',
+  border: '2px solid var(--color-neutral-900)',
   backgroundColor: '#FF6FAF',
   color: '#fff',
   fontWeight: 700,
   fontSize: '18px',
   cursor: 'pointer',
-  boxShadow: '4px 4px 0 #17171F',
+  boxShadow: '4px 4px 0 var(--color-neutral-900)',
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
   padding: '14px 24px',
   borderRadius: '16px',
-  border: '2px solid #17171F',
-  backgroundColor: '#FAF7FB',
-  color: '#17171F',
+  border: '2px solid var(--color-neutral-900)',
+  backgroundColor: 'var(--color-neutral-50)',
+  color: 'var(--color-neutral-900)',
   fontWeight: 600,
   fontSize: '16px',
   cursor: 'pointer',
-  boxShadow: '4px 4px 0 #17171F',
+  boxShadow: '4px 4px 0 var(--color-neutral-900)',
 };

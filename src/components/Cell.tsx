@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Cell as CellType, PlayerId, PiecePattern } from '../engine/types.ts';
 import { EMPTY_CELL } from '../engine/types.ts';
+import { darkenColor, lightenColor } from '../utils/color.ts';
 
 interface CellProps {
   value: CellType;
@@ -22,21 +23,7 @@ function getPlayerColor(player: PlayerId, colors: Record<number, string>): strin
   return colors[player] || '#ccc';
 }
 
-function lightenColor(hex: string, amount: number): string {
-  const num = parseInt(hex.replace('#', ''), 16);
-  const r = Math.min(255, ((num >> 16) & 0xFF) + Math.round(255 * amount));
-  const g = Math.min(255, ((num >> 8) & 0xFF) + Math.round(255 * amount));
-  const b = Math.min(255, (num & 0xFF) + Math.round(255 * amount));
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
-}
 
-function darkenColor(hex: string, amount: number): string {
-  const num = parseInt(hex.replace('#', ''), 16);
-  const r = Math.max(0, Math.round(((num >> 16) & 0xFF) * (1 - amount)));
-  const g = Math.max(0, Math.round(((num >> 8) & 0xFF) * (1 - amount)));
-  const b = Math.max(0, Math.round((num & 0xFF) * (1 - amount)));
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
-}
 
 export const Cell: React.FC<CellProps> = React.memo(function Cell({
   value, col, blocked, isWinning, isDropping, dropDistance, isShaking, pattern, playerColors, playerOutlineColors, onClick, onMouseEnter,
@@ -53,7 +40,7 @@ export const Cell: React.FC<CellProps> = React.memo(function Cell({
     height: '80%',
     borderRadius: '50%',
     background: isEmpty
-      ? (blocked ? '#1B1230' : 'radial-gradient(circle at 50% 40%, #FFFFFF 0%, #F3ECFF 60%, #EDE4F5 100%)')
+      ? (blocked ? 'var(--color-cell-blocked)' : 'radial-gradient(circle at 50% 40%, #FFFFFF 0%, var(--color-bg-card) 60%, #EDE4F5 100%)')
       : `radial-gradient(circle at 35% 35%, ${lightenColor(color, 0.3)} 0%, ${color} 50%, ${darkenColor(color, 0.15)} 100%)`,
     border: !isEmpty && outlineColor ? `3px solid ${outlineColor}` : 'none',
     transition: isDropping ? 'none' : 'background 0.2s ease, transform 0.25s ease',
@@ -73,10 +60,8 @@ export const Cell: React.FC<CellProps> = React.memo(function Cell({
     <div
       className={`cell${isShaking ? ' cell-shake' : ''}`}
       role="button"
-      tabIndex={0}
       aria-label={`Column ${col + 1}${isEmpty ? '' : `, Player ${value}`}${blocked ? ', blocked' : ''}`}
       onClick={() => onClick(col)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(col); }}
       onMouseEnter={onMouseEnter}
       style={{
         display: 'flex',

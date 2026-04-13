@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import type { Board as BoardType, PlayerId, BoardConfig, PlayerConfig, GameMode } from '../engine/types.ts';
 import { EMPTY_CELL, PIECE_PATTERNS } from '../engine/types.ts';
 import { getWinningCells } from '../engine/winDetection.ts';
@@ -52,10 +52,27 @@ export const Board: React.FC<BoardProps> = React.memo(function Board({
     return new Set(cells.map(([r, c]) => `${r},${c}`));
   }, [board, winner, lastMove, config.connectN]);
 
+  const handleBoardKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!gameActive) return;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      setHoveredCol(prev => prev === null ? config.cols - 1 : (prev - 1 + config.cols) % config.cols);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      setHoveredCol(prev => prev === null ? 0 : (prev + 1) % config.cols);
+    } else if ((e.key === 'Enter' || e.key === ' ') && hoveredCol !== null) {
+      e.preventDefault();
+      onColumnClick(hoveredCol);
+    }
+  }, [gameActive, hoveredCol, config.cols, onColumnClick]);
+
   return (
     <div
       onMouseLeave={() => setHoveredCol(null)}
-      style={{ maxWidth: '560px', width: '100%', margin: '0 auto' }}
+      onKeyDown={handleBoardKeyDown}
+      tabIndex={0}
+      aria-label="Game board - use arrow keys to select column, Enter to drop piece"
+      style={{ maxWidth: '560px', width: '100%', margin: '0 auto', outline: 'none' }}
     >
       {/* Ghost piece preview row */}
       {gameActive && (
@@ -91,7 +108,7 @@ export const Board: React.FC<BoardProps> = React.memo(function Board({
           gridTemplateColumns: `repeat(${config.cols}, 1fr)`,
           gap: '6px',
           padding: '16px',
-          backgroundColor: mode === 'classic' ? '#D6D6F5' : '#8B7FC7',
+          backgroundColor: mode === 'classic' ? 'var(--color-board-classic)' : 'var(--color-board-fullboard)',
           borderRadius: '20px',
           width: '100%',
           boxShadow: mode === 'classic'

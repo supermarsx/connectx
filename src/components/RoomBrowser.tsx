@@ -5,29 +5,29 @@ import { api } from '../services/api.ts';
 const cardStyle: React.CSSProperties = {
   padding: '20px 24px',
   borderRadius: '16px',
-  border: '2px solid #17171F',
-  backgroundColor: '#F3ECFF',
-  boxShadow: '4px 4px 0 #17171F',
+  border: '2px solid var(--color-neutral-900)',
+  backgroundColor: 'var(--color-bg-card)',
+  boxShadow: '4px 4px 0 var(--color-neutral-900)',
 };
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '10px 14px',
   borderRadius: '12px',
-  border: '2px solid #17171F',
-  backgroundColor: '#FAF7FB',
+  border: '2px solid var(--color-neutral-900)',
+  backgroundColor: 'var(--color-neutral-50)',
   fontSize: '14px',
   fontWeight: 500,
-  color: '#17171F',
+  color: 'var(--color-neutral-900)',
   outline: 'none',
   boxSizing: 'border-box',
 };
 
 const btnSmall = (color: string): React.CSSProperties => ({
   padding: '8px 18px', borderRadius: '12px',
-  border: '2px solid #17171F', backgroundColor: color,
+  border: '2px solid var(--color-neutral-900)', backgroundColor: color,
   color: '#fff', fontWeight: 700, fontSize: '13px', cursor: 'pointer',
-  boxShadow: '3px 3px 0 #17171F',
+  boxShadow: '3px 3px 0 var(--color-neutral-900)',
 });
 
 interface PublicRoom {
@@ -61,7 +61,18 @@ export const RoomBrowser: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadRooms();
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await api.getPublicRooms();
+        if (!cancelled) setRooms(data.rooms);
+      } catch {
+        // ignore - server may be unavailable
+      }
+      if (!cancelled) setLoading(false);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const loadRooms = async () => {
@@ -98,7 +109,7 @@ export const RoomBrowser: React.FC = () => {
       minHeight: '100vh', gap: '20px', padding: '32px', maxWidth: '480px', margin: '0 auto',
     }}>
       <h2 style={{
-        fontSize: '24px', fontWeight: 800, color: '#17171F',
+        fontSize: '24px', fontWeight: 800, color: 'var(--color-neutral-900)',
         fontFamily: 'var(--font-display)', margin: 0,
       }}>
         Custom Rooms
@@ -120,7 +131,7 @@ export const RoomBrowser: React.FC = () => {
           />
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: '120px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#9C9CB1', textTransform: 'uppercase' }}>Mode</label>
+              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-neutral-400)', textTransform: 'uppercase' }}>Mode</label>
               <select
                 value={mode} onChange={e => setMode(e.target.value as 'classic' | 'fullboard')}
                 style={{ ...inputStyle, marginTop: '4px' }}
@@ -130,7 +141,7 @@ export const RoomBrowser: React.FC = () => {
               </select>
             </div>
             <div style={{ minWidth: '80px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#9C9CB1', textTransform: 'uppercase' }}>Connect</label>
+              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-neutral-400)', textTransform: 'uppercase' }}>Connect</label>
               <select
                 value={connectN} onChange={e => setConnectN(Number(e.target.value) as 4 | 5 | 6)}
                 style={{ ...inputStyle, marginTop: '4px' }}
@@ -143,7 +154,7 @@ export const RoomBrowser: React.FC = () => {
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <div style={{ minWidth: '80px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#9C9CB1', textTransform: 'uppercase' }}>Players</label>
+              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-neutral-400)', textTransform: 'uppercase' }}>Players</label>
               <select
                 value={maxPlayers} onChange={e => setMaxPlayers(Number(e.target.value) as 2 | 3 | 4)}
                 style={{ ...inputStyle, marginTop: '4px' }}
@@ -154,7 +165,7 @@ export const RoomBrowser: React.FC = () => {
               </select>
             </div>
             <div style={{ minWidth: '80px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#9C9CB1', textTransform: 'uppercase' }}>Rounds</label>
+              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-neutral-400)', textTransform: 'uppercase' }}>Rounds</label>
               <select
                 value={totalRounds} onChange={e => setTotalRounds(Number(e.target.value))}
                 style={{ ...inputStyle, marginTop: '4px' }}
@@ -165,7 +176,7 @@ export const RoomBrowser: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '2px' }}>
               <label style={{
                 display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
-                fontSize: '13px', fontWeight: 600, color: '#17171F',
+                fontSize: '13px', fontWeight: 600, color: 'var(--color-neutral-900)',
               }}>
                 <input
                   type="checkbox" checked={isPublic}
@@ -215,16 +226,16 @@ export const RoomBrowser: React.FC = () => {
           </h3>
           <button onClick={loadRooms} style={{
             padding: '4px 12px', borderRadius: '8px',
-            border: '1.5px solid #17171F', backgroundColor: '#FAF7FB',
-            fontSize: '12px', fontWeight: 600, cursor: 'pointer', color: '#9C9CB1',
+            border: '1.5px solid var(--color-neutral-900)', backgroundColor: 'var(--color-neutral-50)',
+            fontSize: '12px', fontWeight: 600, cursor: 'pointer', color: 'var(--color-neutral-400)',
           }}>
             Refresh
           </button>
         </div>
         {loading ? (
-          <p style={{ color: '#9C9CB1', fontSize: '13px', textAlign: 'center' }}>Loading...</p>
+          <p style={{ color: 'var(--color-neutral-400)', fontSize: '13px', textAlign: 'center' }}>Loading...</p>
         ) : rooms.length === 0 ? (
-          <p style={{ color: '#9C9CB1', fontSize: '13px', textAlign: 'center', fontStyle: 'italic' }}>
+          <p style={{ color: 'var(--color-neutral-400)', fontSize: '13px', textAlign: 'center', fontStyle: 'italic' }}>
             No public rooms available
           </p>
         ) : (
@@ -233,11 +244,11 @@ export const RoomBrowser: React.FC = () => {
               <div key={room.id} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '10px 14px', borderRadius: '12px',
-                backgroundColor: '#FAF7FB', border: '1.5px solid #17171F',
+                backgroundColor: 'var(--color-neutral-50)', border: '1.5px solid var(--color-neutral-900)',
               }}>
                 <div>
-                  <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: '#17171F' }}>{room.name}</p>
-                  <p style={{ margin: 0, fontSize: '11px', color: '#9C9CB1' }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: 'var(--color-neutral-900)' }}>{room.name}</p>
+                  <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-neutral-400)' }}>
                     {room.hostName} · {room.mode} · Connect {room.connectN} · {room.playerCount}/{room.maxPlayers}
                   </p>
                 </div>
@@ -252,8 +263,8 @@ export const RoomBrowser: React.FC = () => {
 
       <button onClick={() => setOnlinePhase('menu')} style={{
         padding: '10px 24px', borderRadius: '12px',
-        border: '2px solid #17171F', backgroundColor: '#FAF7FB',
-        color: '#9C9CB1', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
+        border: '2px solid var(--color-neutral-900)', backgroundColor: 'var(--color-neutral-50)',
+        color: 'var(--color-neutral-400)', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
       }}>
         ← Back
       </button>

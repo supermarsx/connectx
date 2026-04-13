@@ -73,18 +73,18 @@ describe('Cell component', () => {
     expect(onClick).toHaveBeenCalledWith(3);
   });
 
-  it('responds to Enter key', () => {
+  it('does not handle Enter key directly (board handles keyboard nav)', () => {
     const onClick = vi.fn();
     render(<Cell value={EMPTY_CELL} {...defaultProps} onClick={onClick} />);
     fireEvent.keyDown(screen.getByRole('button'), { key: 'Enter' });
-    expect(onClick).toHaveBeenCalledWith(3);
+    expect(onClick).not.toHaveBeenCalled();
   });
 
-  it('responds to Space key', () => {
+  it('does not handle Space key directly (board handles keyboard nav)', () => {
     const onClick = vi.fn();
     render(<Cell value={EMPTY_CELL} {...defaultProps} onClick={onClick} />);
     fireEvent.keyDown(screen.getByRole('button'), { key: ' ' });
-    expect(onClick).toHaveBeenCalledWith(3);
+    expect(onClick).not.toHaveBeenCalled();
   });
 });
 

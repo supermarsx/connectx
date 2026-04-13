@@ -17,6 +17,8 @@ export const SettingsScreen: React.FC = () => {
   const toggleReduceMotion = useSettingsStore(s => s.toggleReduceMotion);
   const colorblindPatterns = useSettingsStore(s => s.colorblindPatterns);
   const toggleColorblindPatterns = useSettingsStore(s => s.toggleColorblindPatterns);
+  const theme = useSettingsStore(s => s.theme);
+  const setTheme = useSettingsStore(s => s.setTheme);
 
   const favoriteColor = useProfileStore(s => s.favoriteColor);
   const setFavoriteColor = useProfileStore(s => s.setFavoriteColor);
@@ -28,7 +30,7 @@ export const SettingsScreen: React.FC = () => {
       padding: '32px',
     }}>
       <h1 style={{
-        fontSize: '36px', fontWeight: 800, color: '#17171F',
+        fontSize: '36px', fontWeight: 800, color: 'var(--color-neutral-900)',
         margin: 0, fontFamily: 'var(--font-display)',
       }}>
         Settings
@@ -47,7 +49,7 @@ export const SettingsScreen: React.FC = () => {
             onChange={e => setVolume(parseFloat(e.target.value))}
             style={{ flex: 1, accentColor: '#FF6FAF' }}
           />
-          <span style={{ fontSize: '13px', color: '#9C9CB1', minWidth: '36px', textAlign: 'right' }}>
+          <span style={{ fontSize: '13px', color: 'var(--color-neutral-400)', minWidth: '36px', textAlign: 'right' }}>
             {Math.round(volume * 100)}%
           </span>
         </label>
@@ -61,6 +63,28 @@ export const SettingsScreen: React.FC = () => {
         <ToggleRow label="Reduce Motion" checked={reduceMotion} onToggle={toggleReduceMotion} />
       </Section>
 
+      {/* Theme */}
+      <Section title="Theme">
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {(['light', 'system', 'dark'] as const).map(opt => (
+            <button
+              key={opt}
+              onClick={() => setTheme(opt)}
+              style={{
+                flex: 1, padding: '8px 0', borderRadius: '20px',
+                border: '2px solid var(--color-neutral-900)', fontWeight: 700, fontSize: '13px',
+                cursor: 'pointer', fontFamily: 'var(--font-body)',
+                backgroundColor: theme === opt ? '#FF6FAF' : 'var(--color-bg-base)',
+                color: theme === opt ? '#fff' : 'var(--color-neutral-900)',
+                boxShadow: theme === opt ? '2px 2px 0 var(--color-neutral-900)' : 'none',
+              }}
+            >
+              {opt === 'light' ? '☀️ Light' : opt === 'dark' ? '🌙 Dark' : '💻 System'}
+            </button>
+          ))}
+        </div>
+      </Section>
+
       {/* Preferred Color */}
       <Section title="Preferred Color">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
@@ -72,7 +96,7 @@ export const SettingsScreen: React.FC = () => {
               style={{
                 width: '36px', height: '36px', borderRadius: '50%',
                 backgroundColor: color, cursor: 'pointer',
-                border: color === favoriteColor ? '3px solid #17171F' : '2px solid transparent',
+                border: color === favoriteColor ? '3px solid var(--color-neutral-900)' : '2px solid transparent',
                 boxShadow: color === favoriteColor ? '0 0 0 2px #FFD36B' : 'none',
                 transition: 'border 0.15s ease, box-shadow 0.15s ease',
               }}
@@ -86,8 +110,8 @@ export const SettingsScreen: React.FC = () => {
         onClick={() => setPhase('menu')}
         style={{
           padding: '10px 28px', borderRadius: '24px',
-          border: '2px solid #17171F', backgroundColor: '#fff',
-          color: '#17171F', fontWeight: 700, fontSize: '15px',
+          border: '2px solid var(--color-neutral-900)', backgroundColor: '#fff',
+          color: 'var(--color-neutral-900)', fontWeight: 700, fontSize: '15px',
           cursor: 'pointer', fontFamily: 'var(--font-body)',
         }}
       >
@@ -98,14 +122,14 @@ export const SettingsScreen: React.FC = () => {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: '14px', fontWeight: 600, color: '#17171F', minWidth: '100px',
+  fontSize: '14px', fontWeight: 600, color: 'var(--color-neutral-900)', minWidth: '100px',
 };
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div style={{
     width: '100%', maxWidth: '360px', padding: '20px 24px',
-    backgroundColor: '#F3ECFF', borderRadius: '16px',
-    border: '2px solid #17171F', boxShadow: '4px 4px 0 #17171F',
+    backgroundColor: 'var(--color-bg-card)', borderRadius: '16px',
+    border: '2px solid var(--color-neutral-900)', boxShadow: '4px 4px 0 var(--color-neutral-900)',
     display: 'flex', flexDirection: 'column', gap: '14px',
   }}>
     <h2 style={{
@@ -130,8 +154,8 @@ const ToggleRow: React.FC<{ label: string; checked: boolean; onToggle: () => voi
       onClick={onToggle}
       style={{
         width: '44px', height: '24px', borderRadius: '12px',
-        border: '2px solid #17171F', cursor: 'pointer',
-        backgroundColor: checked ? '#FF6FAF' : '#FAF7FB',
+        border: '2px solid var(--color-neutral-900)', cursor: 'pointer',
+        backgroundColor: checked ? '#FF6FAF' : 'var(--color-neutral-50)',
         position: 'relative', transition: 'background-color 0.15s ease',
         padding: 0,
       }}
@@ -140,7 +164,7 @@ const ToggleRow: React.FC<{ label: string; checked: boolean; onToggle: () => voi
         position: 'absolute', top: '2px',
         left: checked ? '20px' : '2px',
         width: '16px', height: '16px', borderRadius: '50%',
-        backgroundColor: '#fff', border: '1px solid #17171F',
+        backgroundColor: '#fff', border: '1px solid var(--color-neutral-900)',
         transition: 'left 0.15s ease',
       }} />
     </button>

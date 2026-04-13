@@ -4,9 +4,9 @@ import { useOnlineStore } from '../store/onlineStore.ts';
 const cardStyle: React.CSSProperties = {
   padding: '28px 24px',
   borderRadius: '16px',
-  border: '3px solid #17171F',
-  backgroundColor: '#F3ECFF',
-  boxShadow: '5px 5px 0 #17171F',
+  border: '3px solid var(--color-neutral-900)',
+  backgroundColor: 'var(--color-bg-card)',
+  boxShadow: '5px 5px 0 var(--color-neutral-900)',
   width: '100%',
   maxWidth: '360px',
 };
@@ -15,11 +15,11 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '12px 16px',
   borderRadius: '12px',
-  border: '2px solid #17171F',
-  backgroundColor: '#FAF7FB',
+  border: '2px solid var(--color-neutral-900)',
+  backgroundColor: 'var(--color-neutral-50)',
   fontSize: '15px',
   fontWeight: 500,
-  color: '#17171F',
+  color: 'var(--color-neutral-900)',
   outline: 'none',
   boxSizing: 'border-box',
 };
@@ -28,13 +28,13 @@ const btnStyle = (color: string, disabled = false): React.CSSProperties => ({
   width: '100%',
   padding: '14px 24px',
   borderRadius: '14px',
-  border: '2px solid #17171F',
-  backgroundColor: disabled ? '#E0D6E6' : color,
+  border: '2px solid var(--color-neutral-900)',
+  backgroundColor: disabled ? 'var(--color-disabled)' : color,
   color: '#fff',
   fontWeight: 700,
   fontSize: '16px',
   cursor: disabled ? 'not-allowed' : 'pointer',
-  boxShadow: disabled ? 'none' : '4px 4px 0 #17171F',
+  boxShadow: disabled ? 'none' : '4px 4px 0 var(--color-neutral-900)',
   opacity: disabled ? 0.6 : 1,
   transition: 'transform 0.15s ease, box-shadow 0.15s ease',
 });
@@ -83,12 +83,12 @@ export const AuthScreen: React.FC = () => {
       {/* Logo */}
       <div style={{ textAlign: 'center' }}>
         <h1 style={{
-          fontSize: '36px', fontWeight: 800, color: '#17171F', margin: 0,
+          fontSize: '36px', fontWeight: 800, color: 'var(--color-neutral-900)', margin: 0,
           letterSpacing: '-1px', fontFamily: 'var(--font-display)',
         }}>
           Connect<span style={{ color: '#FF6FAF' }}>X</span> Online
         </h1>
-        <p style={{ fontSize: '14px', color: '#9C9CB1', marginTop: '6px', fontWeight: 500 }}>
+        <p style={{ fontSize: '14px', color: 'var(--color-neutral-400)', marginTop: '6px', fontWeight: 500 }}>
           Play against friends & rivals worldwide
         </p>
       </div>
@@ -98,11 +98,11 @@ export const AuthScreen: React.FC = () => {
         {(['login', 'register'] as const).map(t => (
           <button key={t} onClick={() => { setTab(t); setLocalError(''); clearAuthError(); }} style={{
             padding: '8px 24px', borderRadius: '12px',
-            border: '2px solid #17171F',
-            backgroundColor: tab === t ? '#FF6FAF' : '#FAF7FB',
-            color: tab === t ? '#fff' : '#17171F',
+            border: '2px solid var(--color-neutral-900)',
+            backgroundColor: tab === t ? '#FF6FAF' : 'var(--color-neutral-50)',
+            color: tab === t ? '#fff' : 'var(--color-neutral-900)',
             fontWeight: 700, fontSize: '14px', cursor: 'pointer',
-            boxShadow: tab === t ? '3px 3px 0 #17171F' : 'none',
+            boxShadow: tab === t ? '3px 3px 0 var(--color-neutral-900)' : 'none',
           }}>
             {t === 'login' ? 'Login' : 'Register'}
           </button>
@@ -111,53 +111,79 @@ export const AuthScreen: React.FC = () => {
 
       {/* Form */}
       <div style={cardStyle}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <form onSubmit={(e) => { e.preventDefault(); if (tab === 'login') { handleLogin(); } else { handleRegister(); } }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {tab === 'register' && (
-            <input
-              type="text" placeholder="Username" value={username}
-              onChange={e => setUsername(e.target.value)} maxLength={20}
-              style={inputStyle}
-            />
+            <div>
+              <label htmlFor="auth-username" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-neutral-900)', marginBottom: '4px', display: 'block' }}>Username</label>
+              <input
+                id="auth-username"
+                type="text" placeholder="Username" value={username}
+                onChange={e => setUsername(e.target.value)} maxLength={20}
+                autoComplete="username"
+                aria-invalid={!!error}
+                style={inputStyle}
+              />
+            </div>
           )}
-          <input
-            type="email" placeholder="Email" value={email}
-            onChange={e => setEmail(e.target.value)}
-            style={inputStyle}
-          />
-          <input
-            type="password" placeholder="Password" value={password}
-            onChange={e => setPassword(e.target.value)}
-            style={inputStyle}
-          />
-          {tab === 'register' && (
+          <div>
+            <label htmlFor="auth-email" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-neutral-900)', marginBottom: '4px', display: 'block' }}>Email</label>
             <input
-              type="password" placeholder="Confirm Password" value={confirmPassword}
-              onChange={e => setConfirmPassword(e.target.value)}
+              id="auth-email"
+              type="email" placeholder="Email" value={email}
+              onChange={e => setEmail(e.target.value)}
+              autoComplete="email"
+              aria-invalid={!!error}
               style={inputStyle}
             />
+          </div>
+          <div>
+            <label htmlFor="auth-password" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-neutral-900)', marginBottom: '4px', display: 'block' }}>Password</label>
+            <input
+              id="auth-password"
+              type="password" placeholder="Password" value={password}
+              onChange={e => setPassword(e.target.value)}
+              autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
+              aria-invalid={!!error}
+              style={inputStyle}
+            />
+          </div>
+          {tab === 'register' && (
+            <div>
+              <label htmlFor="auth-confirm-password" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-neutral-900)', marginBottom: '4px', display: 'block' }}>Confirm Password</label>
+              <input
+                id="auth-confirm-password"
+                type="password" placeholder="Confirm Password" value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+                aria-invalid={!!error}
+                style={inputStyle}
+              />
+            </div>
           )}
           {error && (
-            <p style={{ color: '#E35591', fontSize: '13px', fontWeight: 600, margin: 0 }}>
+            <p role="alert" style={{ color: '#E35591', fontSize: '13px', fontWeight: 600, margin: 0 }}>
               {error}
             </p>
           )}
           <button
-            onClick={tab === 'login' ? handleLogin : handleRegister}
+            type="submit"
             disabled={loading}
             style={btnStyle('#FF6FAF', loading)}
           >
             {loading ? 'Please wait...' : tab === 'login' ? 'Login' : 'Create Account'}
           </button>
-        </div>
+        </form>
       </div>
 
       {/* Skip button */}
       <button onClick={() => {
+        sessionStorage.removeItem('connectx-online-flow');
+        sessionStorage.removeItem('connectx-online-phase');
         useOnlineStore.getState().isOnlineFlow && useOnlineStore.setState({ isOnlineFlow: false });
       }} style={{
         padding: '10px 24px', borderRadius: '12px',
-        border: '2px solid #17171F', backgroundColor: '#FAF7FB',
-        color: '#9C9CB1', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
+        border: '2px solid var(--color-neutral-900)', backgroundColor: 'var(--color-neutral-50)',
+        color: 'var(--color-neutral-400)', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
       }}>
         ← Back to Local Play
       </button>

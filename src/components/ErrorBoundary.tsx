@@ -36,9 +36,9 @@ export class ErrorBoundary extends React.Component<
           fontFamily: "'Inter', sans-serif",
         }}>
           <div style={{
-            maxWidth: '400px', padding: '32px', backgroundColor: '#F3ECFF',
-            borderRadius: '20px', border: '3px solid #17171F',
-            boxShadow: '6px 6px 0 #17171F', textAlign: 'center',
+            maxWidth: '400px', padding: '32px', backgroundColor: 'var(--color-bg-card)',
+            borderRadius: '20px', border: '3px solid var(--color-neutral-900)',
+            boxShadow: '6px 6px 0 var(--color-neutral-900)', textAlign: 'center',
           }}>
             <h1 style={{
               fontSize: '28px', fontWeight: 800, color: '#FF6FAF',
@@ -46,19 +46,19 @@ export class ErrorBoundary extends React.Component<
             }}>
               Oops!
             </h1>
-            <p style={{ fontSize: '15px', color: '#444457', marginBottom: '8px' }}>
+            <p style={{ fontSize: '15px', color: 'var(--color-neutral-700)', marginBottom: '8px' }}>
               Something went wrong. Don't worry — your progress is safe.
             </p>
-            <p style={{ fontSize: '12px', color: '#9C9CB1', marginBottom: '20px', wordBreak: 'break-word' }}>
+            <p style={{ fontSize: '12px', color: 'var(--color-neutral-400)', marginBottom: '20px', wordBreak: 'break-word' }}>
               {this.state.error?.message ?? 'Unknown error'}
             </p>
             <button
               onClick={this.handleReset}
               style={{
                 padding: '12px 28px', borderRadius: '16px',
-                border: '2px solid #17171F', backgroundColor: '#FF6FAF',
+                border: '2px solid var(--color-neutral-900)', backgroundColor: '#FF6FAF',
                 color: '#fff', fontWeight: 700, fontSize: '16px',
-                cursor: 'pointer', boxShadow: '4px 4px 0 #17171F',
+                cursor: 'pointer', boxShadow: '4px 4px 0 var(--color-neutral-900)',
               }}
             >
               Try Again

@@ -70,11 +70,11 @@ export const MenuScreen: React.FC = () => {
       {/* Sound toggle */}
       <button
         onClick={toggleMute}
-        aria-label={muted ? 'Unmute' : 'Mute'}
+        aria-label={muted ? 'Unmute audio' : 'Mute audio'}
         style={{
           position: 'absolute', top: '16px', right: '16px', zIndex: 1,
           background: 'none', border: 'none', cursor: 'pointer',
-          fontSize: '22px', color: '#9C9CB1', padding: '8px',
+          fontSize: '22px', color: 'var(--color-neutral-400)', padding: '8px',
         }}
       >
         {muted ? '🔇' : '🔊'}
@@ -83,13 +83,13 @@ export const MenuScreen: React.FC = () => {
       {/* Logo */}
       <div style={{ textAlign: 'center', zIndex: 1 }}>
         <h1 style={{
-          fontSize: '40px', fontWeight: 800, color: '#17171F',
+          fontSize: '40px', fontWeight: 800, color: 'var(--color-neutral-900)',
           margin: 0, letterSpacing: '-1px', fontFamily: 'var(--font-display)',
         }}>
           Connect<span style={{ color: '#FF6FAF' }}>X</span>
         </h1>
         <p style={{
-          fontSize: '16px', color: '#9C9CB1', marginTop: '8px',
+          fontSize: '16px', color: 'var(--color-neutral-400)', marginTop: '8px',
           fontWeight: 500,
         }}>
           Drop. Connect. Win.
@@ -154,8 +154,8 @@ export const MenuScreen: React.FC = () => {
       {showLeaderboard && (
         <div style={{
           width: '100%', maxWidth: '320px', padding: '20px 24px',
-          backgroundColor: '#F3ECFF', borderRadius: '16px',
-          border: '2px solid #17171F', boxShadow: '4px 4px 0 #17171F',
+          backgroundColor: 'var(--color-bg-card)', borderRadius: '16px',
+          border: '2px solid var(--color-neutral-900)', boxShadow: '4px 4px 0 var(--color-neutral-900)',
         }}>
           <h3 style={{
             fontSize: '18px', fontWeight: 700, color: '#B388FF',
@@ -172,8 +172,8 @@ export const MenuScreen: React.FC = () => {
       {/* Profile card */}
       <div style={{
         width: '100%', maxWidth: '320px', padding: '16px 20px', zIndex: 1,
-        backgroundColor: '#F3ECFF', borderRadius: '16px',
-        border: '2px solid #17171F', boxShadow: '4px 4px 0 #17171F',
+        backgroundColor: 'var(--color-bg-card)', borderRadius: '16px',
+        border: '2px solid var(--color-neutral-900)', boxShadow: '4px 4px 0 var(--color-neutral-900)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
           <input
@@ -182,7 +182,7 @@ export const MenuScreen: React.FC = () => {
             placeholder="Enter username"
             maxLength={20}
             style={{
-              fontWeight: 700, fontSize: '18px', color: '#17171F',
+              fontWeight: 700, fontSize: '18px', color: 'var(--color-neutral-900)',
               border: 'none', background: 'transparent', outline: 'none',
               borderBottom: '2px solid transparent', padding: '2px 0',
               transition: 'border-color 0.15s ease', width: '160px',
@@ -197,7 +197,7 @@ export const MenuScreen: React.FC = () => {
             {currentTitle}
           </span>
         </div>
-        <p style={{ fontSize: '13px', color: '#9C9CB1', margin: '0 0 8px' }}>
+        <p style={{ fontSize: '13px', color: 'var(--color-neutral-400)', margin: '0 0 8px' }}>
           Games: {gamesPlayed} | Wins: {gamesWon}
         </p>
         {unlockedTitles.length > 1 && (
@@ -209,9 +209,9 @@ export const MenuScreen: React.FC = () => {
                 style={{
                   padding: '3px 10px', borderRadius: '12px', fontSize: '11px',
                   fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s ease',
-                  border: t === currentTitle ? '2px solid #17171F' : '1px solid #ccc',
-                  backgroundColor: t === currentTitle ? '#FFD36B' : '#FAF7FB',
-                  color: '#17171F',
+                  border: t === currentTitle ? '2px solid var(--color-neutral-900)' : '1px solid #ccc',
+                  backgroundColor: t === currentTitle ? '#FFD36B' : 'var(--color-neutral-50)',
+                  color: 'var(--color-neutral-900)',
                 }}
               >
                 {t}
@@ -235,11 +235,11 @@ interface MenuCardProps {
 const StatRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div style={{
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    padding: '8px 12px', backgroundColor: '#FAF7FB', borderRadius: '10px',
-    border: '1px solid #17171F',
+    padding: '8px 12px', backgroundColor: 'var(--color-neutral-50)', borderRadius: '10px',
+    border: '1px solid var(--color-neutral-900)',
   }}>
-    <span style={{ fontSize: '14px', color: '#9C9CB1', fontWeight: 500 }}>{label}</span>
-    <span style={{ fontSize: '16px', color: '#17171F', fontWeight: 700 }}>{value}</span>
+    <span style={{ fontSize: '14px', color: 'var(--color-neutral-400)', fontWeight: 500 }}>{label}</span>
+    <span style={{ fontSize: '16px', color: 'var(--color-neutral-900)', fontWeight: 700 }}>{value}</span>
   </div>
 );
 
@@ -251,9 +251,9 @@ const MenuCard: React.FC<MenuCardProps> = ({ title, subtitle, color, disabled, o
       display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
       padding: '20px 24px',
       borderRadius: '16px',
-      border: '3px solid #17171F',
-      backgroundColor: disabled ? '#F0EDF2' : '#F3ECFF',
-      boxShadow: disabled ? 'none' : '5px 5px 0 #17171F',
+      border: '3px solid var(--color-neutral-900)',
+      backgroundColor: disabled ? '#F0EDF2' : 'var(--color-bg-card)',
+      boxShadow: disabled ? 'none' : '5px 5px 0 var(--color-neutral-900)',
       cursor: disabled ? 'not-allowed' : 'pointer',
       opacity: disabled ? 0.6 : 1,
       transition: 'transform 0.15s ease, box-shadow 0.15s ease',
@@ -262,12 +262,12 @@ const MenuCard: React.FC<MenuCardProps> = ({ title, subtitle, color, disabled, o
     }}
   >
     <span style={{
-      fontSize: '20px', fontWeight: 700, color: disabled ? '#9C9CB1' : color,
+      fontSize: '20px', fontWeight: 700, color: disabled ? 'var(--color-neutral-400)' : color,
     }}>
       {title}
     </span>
     <span style={{
-      fontSize: '14px', color: '#9C9CB1', marginTop: '4px',
+      fontSize: '14px', color: 'var(--color-neutral-400)', marginTop: '4px',
     }}>
       {subtitle}
     </span>
