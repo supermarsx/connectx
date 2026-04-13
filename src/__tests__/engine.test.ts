@@ -108,12 +108,12 @@ describe('board.ts', () => {
       expect(isValidMove(b, 4)).toBe(false);
     });
 
-    it('returns true when column is fully blocked but top cell is empty (impl quirk: early-return path)', () => {
+    it('returns false when column is fully blocked even if empty', () => {
       const b = createBoard();
       const blocked = createBlockedGrid();
       for (let r = 0; r < 6; r++) blocked[r][2] = true;
-      // isValidMove returns true because top cell is empty+blocked triggers early return
-      expect(isValidMove(b, 2, blocked)).toBe(true);
+      // All cells are blocked — no valid placement exists
+      expect(isValidMove(b, 2, blocked)).toBe(false);
     });
 
     it('returns false when column is occupied at top and all empty cells below are blocked', () => {
