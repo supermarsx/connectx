@@ -68,3 +68,16 @@ CREATE INDEX IF NOT EXISTS idx_match_players_user    ON match_players (user_id);
 CREATE INDEX IF NOT EXISTS idx_reports_status        ON reports (status);
 CREATE INDEX IF NOT EXISTS idx_reports_reported      ON reports (reported_id);
 CREATE INDEX IF NOT EXISTS idx_blocked_users_blocked ON blocked_users (blocked_id);
+
+-- Friendships
+CREATE TABLE IF NOT EXISTS friendships (
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    friend_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status      VARCHAR(16) DEFAULT 'pending',
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, friend_id),
+    CHECK (user_id <> friend_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_friendships_friend ON friendships (friend_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_status ON friendships (status);

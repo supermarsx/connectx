@@ -1,0 +1,31 @@
+version: "3.8"
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - BOT_SERVICE_SECRET=${BOT_SERVICE_SECRET:-bot-service-dev-secret}
+      - DB_PROVIDER=sqlite
+    volumes:
+      - server-data:/app/data
+
+  bot-service:
+    build:
+      context: .
+      dockerfile: bot-service/Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      - GAME_SERVER_URL=http://server:3001
+      - BOT_SERVICE_SECRET=${BOT_SERVICE_SECRET:-bot-service-dev-secret}
+      - MAX_CONCURRENT_BOTS=100
+    depends_on:
+      - server
+
+volumes:
+  server-data:
