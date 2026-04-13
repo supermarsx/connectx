@@ -133,4 +133,56 @@ export const api = {
       body: JSON.stringify({ blockedId }),
     });
   },
+
+  unblockPlayer(blockedId: string): Promise<void> {
+    return request('/moderation/unblock', {
+      method: 'POST',
+      body: JSON.stringify({ blockedId }),
+    });
+  },
+
+  getBlockedUsers(): Promise<{ blockedIds: string[] }> {
+    return request('/moderation/blocked');
+  },
+
+  // ── Friends / Social ──
+
+  sendFriendRequest(friendId: string): Promise<{ message: string }> {
+    return request('/friends/request', {
+      method: 'POST',
+      body: JSON.stringify({ friendId }),
+    });
+  },
+
+  acceptFriendRequest(requesterId: string): Promise<{ message: string }> {
+    return request('/friends/accept', {
+      method: 'POST',
+      body: JSON.stringify({ requesterId }),
+    });
+  },
+
+  declineFriendRequest(requesterId: string): Promise<{ message: string }> {
+    return request('/friends/decline', {
+      method: 'POST',
+      body: JSON.stringify({ requesterId }),
+    });
+  },
+
+  removeFriend(userId: string): Promise<{ message: string }> {
+    return request(`/friends/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getFriends(): Promise<{ friends: Array<{ userId: string; username: string; rating: number; isOnline: boolean }> }> {
+    return request('/friends');
+  },
+
+  getPendingRequests(): Promise<{ requests: Array<{ userId: string; username: string; createdAt: string }> }> {
+    return request('/friends/pending');
+  },
+
+  searchUsers(username: string): Promise<{ users: Array<{ userId: string; username: string; rating: number }> }> {
+    return request(`/friends/search?username=${encodeURIComponent(username)}`);
+  },
 };

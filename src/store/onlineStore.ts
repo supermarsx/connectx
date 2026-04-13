@@ -7,7 +7,8 @@ import { dropPiece } from '../engine/board.ts';
 
 export type OnlinePhase =
   | 'auth' | 'menu' | 'quickplay-queue' | 'room-browser'
-  | 'room-lobby' | 'online-playing' | 'online-round-end' | 'online-match-end';
+  | 'room-lobby' | 'match-loading' | 'online-playing' | 'online-round-end' | 'online-match-end'
+  | 'friends';
 
 export interface RoomState {
   roomId: string;
@@ -34,6 +35,7 @@ export interface OnlineMatchState {
   disconnectedPlayers: string[];
   ratingChanges: Record<string, number>;
   rematchVotes: string[];
+  blockedCells: boolean[][];
 }
 
 interface OnlineState {
@@ -49,6 +51,8 @@ interface OnlineState {
   authError: string | null;
   /** True when user has entered the online flow (clicked "Play Online") */
   isOnlineFlow: boolean;
+  emotes: Array<{ playerId: string; emoteId: string; timestamp: number }>;
+  moveRejected: boolean;
 }
 
 interface OnlineActions {
@@ -71,6 +75,7 @@ interface OnlineActions {
   requestRematch: () => void;
   setOnlinePhase: (phase: OnlinePhase) => void;
   clearAuthError: () => void;
+  sendEmote: (emoteId: string) => void;
 }
 
 export type OnlineStore = OnlineState & OnlineActions;
@@ -78,6 +83,9 @@ export type OnlineStore = OnlineState & OnlineActions;
 export const useOnlineStore = create<OnlineStore>((set, get) => {
   // Wire socket events
   function wireEvents() {
+    // Clean up previous listeners before attaching new ones
+    wsService.removeAllListeners();
+
     wsService.on('connect', () => {
       set({ isConnected: true });
     });
@@ -114,8 +122,9 @@ export const useOnlineStore = create<OnlineStore>((set, get) => {
           disconnectedPlayers: [],
           ratingChanges: {},
           rematchVotes: [],
+          blockedCells: [],
         },
-        onlinePhase: 'online-playing',
+        onlinePhase: 'match-loading',
       });
     });
 
@@ -173,14 +182,19 @@ export const useOnlineStore = create<OnlineStore>((set, get) => {
           disconnectedPlayers: [],
           ratingChanges: {},
           rematchVotes: [],
+          blockedCells: Array.from({ length: data.config.rows }, () =>
+            Array.from({ length: data.config.cols }, () => false)
+          ),
         },
         onlinePhase: 'online-playing',
       });
     });
 
-    wsService.on('state_update', (data: { board: number[][]; currentTurn: string; lastMove: { row: number; col: number; playerId: string }; scores: Record<string, number> }) => {
+    wsService.on('state_update', (data: { board: number[][]; currentTurn: string; lastMove: { row: number; col: number; playerId: string }; scores: Record<string, number>; blockedCells?: boolean[][] }) => {
       const match = get().onlineMatch;
       if (!match) return;
+      boardSnapshot = null;
+      currentTurnSnapshot = null;
       set({
         onlineMatch: {
           ...match,
@@ -188,11 +202,29 @@ export const useOnlineStore = create<OnlineStore>((set, get) => {
           currentTurn: data.currentTurn,
           lastMove: data.lastMove,
           scores: data.scores,
+          blockedCells: data.blockedCells ?? match.blockedCells,
         },
       });
     });
 
-    wsService.on('round_end', (data: { roundNumber: number; winner: string | null; isDraw: boolean; scores: Record<string, number>; board: number[][] }) => {
+    wsService.on('move_rejected', () => {
+      const match = get().onlineMatch;
+      if (!match || !boardSnapshot) return;
+      set({
+        onlineMatch: {
+          ...match,
+          board: boardSnapshot,
+          currentTurn: currentTurnSnapshot ?? match.currentTurn,
+        },
+        moveRejected: true,
+      });
+      boardSnapshot = null;
+      currentTurnSnapshot = null;
+      if (moveRejectedTimer) clearTimeout(moveRejectedTimer);
+      moveRejectedTimer = setTimeout(() => { set({ moveRejected: false }); moveRejectedTimer = null; }, 2000);
+    });
+
+    wsService.on('round_end', (data: { roundNumber: number; winner: string | null; isDraw: boolean; scores: Record<string, number>; board: number[][]; blockedCells?: boolean[][] }) => {
       const match = get().onlineMatch;
       if (!match) return;
       set({
@@ -203,6 +235,7 @@ export const useOnlineStore = create<OnlineStore>((set, get) => {
           winner: data.winner,
           isDraw: data.isDraw,
           round: data.roundNumber,
+          blockedCells: data.blockedCells ?? match.blockedCells,
         },
         onlinePhase: 'online-round-end',
       });
@@ -249,12 +282,16 @@ export const useOnlineStore = create<OnlineStore>((set, get) => {
     });
 
     wsService.on('chat_emote', (data: { playerId: string; emoteId: string }) => {
-      // Emote display is handled by UI components listening to this event
-      console.log(`[Online] Emote from ${data.playerId}: ${data.emoteId}`);
+      const now = Date.now();
+      const current = get().emotes.filter(e => now - e.timestamp < 3000);
+      set({ emotes: [...current, { playerId: data.playerId, emoteId: data.emoteId, timestamp: now }] });
     });
   }
 
   let eventsWired = false;
+  let boardSnapshot: number[][] | null = null;
+  let currentTurnSnapshot: string | null = null;
+  let moveRejectedTimer: ReturnType<typeof setTimeout> | null = null;
 
   return {
     // State
@@ -266,9 +303,13 @@ export const useOnlineStore = create<OnlineStore>((set, get) => {
     queuePosition: 0,
     currentRoom: null,
     onlineMatch: null,
-    onlinePhase: 'auth',
+    onlinePhase: (sessionStorage.getItem('connectx-online-flow') === 'true'
+      ? (sessionStorage.getItem('connectx-online-phase') as OnlinePhase ?? 'menu')
+      : 'auth') as OnlinePhase,
     authError: null,
-    isOnlineFlow: false,
+    isOnlineFlow: sessionStorage.getItem('connectx-online-flow') === 'true',
+    emotes: [],
+    moveRejected: false,
 
     // Actions
     async login(email: string, password: string) {
@@ -300,6 +341,9 @@ export const useOnlineStore = create<OnlineStore>((set, get) => {
     logout() {
       clearToken();
       wsService.disconnect();
+      eventsWired = false;
+      sessionStorage.removeItem('connectx-online-flow');
+      sessionStorage.removeItem('connectx-online-phase');
       set({
         isAuthenticated: false,
         user: null,
@@ -371,22 +415,25 @@ export const useOnlineStore = create<OnlineStore>((set, get) => {
       // Optimistic local update: apply move immediately for responsive feel
       const match = get().onlineMatch;
       if (match) {
+        if (match.currentTurn !== match.myPlayerId) return;
         const playerIndex = match.players.findIndex(p => p.id === match.myPlayerId);
         if (playerIndex !== -1) {
           const enginePlayerId = playerIndex + 1;
+          // Save snapshot for rollback if server rejects the move
+          boardSnapshot = match.board.map(row => [...row]);
+          currentTurnSnapshot = match.currentTurn;
           const result = dropPiece(match.board, col, enginePlayerId);
-          if (result) {
-            set({
-              onlineMatch: {
-                ...match,
-                board: result.board,
-                lastMove: { row: result.row, col, playerId: match.myPlayerId },
-              },
-            });
-          }
+          if (!result) return; // Don't send invalid move to server
+          set({
+            onlineMatch: {
+              ...match,
+              board: result.board,
+              lastMove: { row: result.row, col, playerId: match.myPlayerId },
+            },
+          });
+          wsService.submitMove({ col });
         }
       }
-      wsService.submitMove({ col });
     },
 
     requestRematch() {
@@ -394,11 +441,24 @@ export const useOnlineStore = create<OnlineStore>((set, get) => {
     },
 
     setOnlinePhase(phase) {
+      sessionStorage.setItem('connectx-online-flow', 'true');
+      sessionStorage.setItem('connectx-online-phase', phase);
       set({ onlinePhase: phase, isOnlineFlow: true });
     },
 
     clearAuthError() {
       set({ authError: null });
+    },
+
+    sendEmote(emoteId: string) {
+      wsService.chatEmote({ emoteId });
+      // Also show own emote locally
+      const { user, emotes } = get();
+      if (user) {
+        const now = Date.now();
+        const current = emotes.filter(e => now - e.timestamp < 3000);
+        set({ emotes: [...current, { playerId: user.id, emoteId, timestamp: now }] });
+      }
     },
   };
 });

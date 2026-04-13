@@ -26,7 +26,8 @@ vi.mock('../services/api.ts', () => ({
 
 // Create mock wsService using vi.hoisted to avoid initialization order issues
 const { mockListeners, mockWsService } = vi.hoisted(() => {
-  const listeners = new Map<string, Set<Function>>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const listeners = new Map<string, Set<(...args: any[]) => void>>();
   return {
     mockListeners: listeners,
     mockWsService: {
@@ -43,12 +44,17 @@ const { mockListeners, mockWsService } = vi.hoisted(() => {
       submitMove: vi.fn(),
       requestRematch: vi.fn(),
       chatEmote: vi.fn(),
-      on: vi.fn((event: string, cb: Function) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      on: vi.fn((event: string, cb: (...args: any[]) => void) => {
         if (!listeners.has(event)) listeners.set(event, new Set());
         listeners.get(event)!.add(cb);
       }),
-      off: vi.fn((event: string, cb: Function) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      off: vi.fn((event: string, cb: (...args: any[]) => void) => {
         listeners.get(event)?.delete(cb);
+      }),
+      removeAllListeners: vi.fn(() => {
+        listeners.clear();
       }),
     },
   };
@@ -127,8 +133,8 @@ describe('onlineStore defaults', () => {
 // ---------------------------------------------------------------------------
 describe('login', () => {
   it('sets authenticated state on success', async () => {
-    const mockUser = { id: 'u1', username: 'Alice', email: 'a@test.com' };
-    (api.login as any).mockResolvedValue({ token: 'tok123', user: mockUser });
+    const mockUser = { id: 'u1', username: 'Alice', email: 'a@test.com', preferredColor: '#FF6FAF', rating: 1200, gamesPlayed: 0, wins: 0, losses: 0, draws: 0 };
+    vi.mocked(api.login).mockResolvedValue({ token: 'tok123', user: mockUser });
 
     await useOnlineStore.getState().login('a@test.com', 'pass123');
 
@@ -141,7 +147,7 @@ describe('login', () => {
   });
 
   it('sets authError on failure', async () => {
-    (api.login as any).mockRejectedValue(new Error('Invalid credentials'));
+    vi.mocked(api.login).mockRejectedValue(new Error('Invalid credentials'));
 
     await expect(useOnlineStore.getState().login('a@test.com', 'wrong')).rejects.toThrow();
 
@@ -152,8 +158,8 @@ describe('login', () => {
 
 describe('register', () => {
   it('sets authenticated state on success', async () => {
-    const mockUser = { id: 'u2', username: 'Bob', email: 'b@test.com' };
-    (api.register as any).mockResolvedValue({ token: 'tok456', user: mockUser });
+    const mockUser = { id: 'u2', username: 'Bob', email: 'b@test.com', preferredColor: '#64E0C6', rating: 1200, gamesPlayed: 0, wins: 0, losses: 0, draws: 0 };
+    vi.mocked(api.register).mockResolvedValue({ token: 'tok456', user: mockUser });
 
     await useOnlineStore.getState().register('Bob', 'b@test.com', 'pass123');
 
@@ -165,7 +171,7 @@ describe('register', () => {
   });
 
   it('sets authError on failure', async () => {
-    (api.register as any).mockRejectedValue(new Error('Email taken'));
+    vi.mocked(api.register).mockRejectedValue(new Error('Email taken'));
 
     await expect(useOnlineStore.getState().register('Bob', 'b@test.com', 'pass')).rejects.toThrow();
     expect(useOnlineStore.getState().authError).toBe('Email taken');
@@ -176,7 +182,7 @@ describe('logout', () => {
   it('clears auth state and disconnects', () => {
     useOnlineStore.setState({
       isAuthenticated: true,
-      user: { id: 'u1', username: 'Alice', email: 'a@test.com' } as any,
+      user: { id: 'u1', username: 'Alice', email: 'a@test.com', preferredColor: '#f00', rating: 1200, gamesPlayed: 0, wins: 0, losses: 0, draws: 0 },
       token: 'tok',
       isConnected: true,
       onlinePhase: 'menu',
@@ -275,7 +281,7 @@ describe('joinRoom', () => {
 describe('leaveRoom', () => {
   it('clears room state and sets phase to room-browser', () => {
     useOnlineStore.setState({
-      currentRoom: { roomId: 'r1', inviteCode: 'X', name: 'Room', hostId: 'h', players: [], config: {} as any },
+      currentRoom: { roomId: 'r1', inviteCode: 'X', name: 'Room', hostId: 'h', players: [], config: { mode: 'classic', connectN: 4, totalRounds: 3, rows: 6, cols: 7, maxPlayers: 2, isPublic: true, name: 'Room' } },
       onlinePhase: 'room-lobby',
     });
 
@@ -305,7 +311,27 @@ describe('startRoom', () => {
 // Match actions
 // ---------------------------------------------------------------------------
 describe('submitMove', () => {
-  it('calls wsService.submitMove', () => {
+  it('calls wsService.submitMove when it is the player turn', () => {
+    useOnlineStore.setState({
+      onlineMatch: {
+        matchId: 'm1',
+        board: [[0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0]],
+        currentTurn: 'u1',
+        myPlayerId: 'u1',
+        players: [{ id: 'u1', name: 'Alice', color: '#f00', isBot: false, rating: 1000 }],
+        scores: {},
+        round: 1,
+        totalRounds: 3,
+        config: { mode: 'classic' as const, connectN: 4, totalRounds: 3, rows: 6, cols: 7 },
+        winner: null,
+        isDraw: false,
+        lastMove: null,
+        disconnectedPlayers: [],
+        ratingChanges: {},
+        rematchVotes: [],
+        blockedCells: [],
+      },
+    });
     useOnlineStore.getState().submitMove(3);
     expect(mockWsService.submitMove).toHaveBeenCalledWith({ col: 3 });
   });
@@ -352,7 +378,7 @@ describe('socket events', () => {
   });
 
   it('room_created sets room state and phase', () => {
-    useOnlineStore.setState({ user: { id: 'u1', username: 'Alice' } as any });
+    useOnlineStore.setState({ user: { id: 'u1', username: 'Alice', email: 'a@test.com', preferredColor: '#f00', rating: 1200, gamesPlayed: 0, wins: 0, losses: 0, draws: 0 } });
     emitMockEvent('room_created', { roomId: 'room-1', inviteCode: 'ABC' });
 
     const s = useOnlineStore.getState();
@@ -364,7 +390,7 @@ describe('socket events', () => {
 
   it('room_update updates room state', () => {
     useOnlineStore.setState({
-      currentRoom: { roomId: 'r1', inviteCode: 'X', name: '', hostId: '', players: [], config: {} as any },
+      currentRoom: { roomId: 'r1', inviteCode: 'X', name: '', hostId: '', players: [], config: { mode: 'classic', connectN: 4, totalRounds: 3, rows: 6, cols: 7, maxPlayers: 2, isPublic: true, name: '' } },
     });
     const players = [{ id: 'u1', name: 'Alice', color: '#f00', isBot: false, rating: 1000 }];
     const config = { mode: 'classic', connectN: 4, totalRounds: 3, rows: 6, cols: 7, maxPlayers: 2, isPublic: true, name: 'Room' };
@@ -379,7 +405,7 @@ describe('socket events', () => {
 
   it('room_closed clears room and returns to menu', () => {
     useOnlineStore.setState({
-      currentRoom: { roomId: 'r1' } as any,
+      currentRoom: { roomId: 'r1', inviteCode: '', name: '', hostId: '', players: [], config: { mode: 'classic', connectN: 4, totalRounds: 3, rows: 6, cols: 7, maxPlayers: 2, isPublic: true, name: '' } },
       onlinePhase: 'room-lobby',
     });
     emitMockEvent('room_closed', { reason: 'Host left' });
@@ -389,7 +415,7 @@ describe('socket events', () => {
   });
 
   it('match_started creates onlineMatch and sets phase', () => {
-    useOnlineStore.setState({ user: { id: 'u1', username: 'Alice' } as any });
+    useOnlineStore.setState({ user: { id: 'u1', username: 'Alice', email: 'a@test.com', preferredColor: '#f00', rating: 1200, gamesPlayed: 0, wins: 0, losses: 0, draws: 0 } });
     const config = { mode: 'classic', connectN: 4, totalRounds: 3, rows: 6, cols: 7 };
     emitMockEvent('match_started', {
       matchId: 'm1',
@@ -412,8 +438,9 @@ describe('socket events', () => {
       onlineMatch: {
         matchId: 'm1', board: [[0, 0]], currentTurn: 'u1', myPlayerId: 'u1',
         players: [], scores: {}, round: 1, totalRounds: 3,
-        config: {} as any, winner: null, isDraw: false, lastMove: null,
+        config: { mode: 'classic' as const, connectN: 4, totalRounds: 3, rows: 6, cols: 7 }, winner: null, isDraw: false, lastMove: null,
         disconnectedPlayers: [], ratingChanges: {}, rematchVotes: [],
+        blockedCells: [],
       },
     });
 
@@ -435,8 +462,9 @@ describe('socket events', () => {
       onlineMatch: {
         matchId: 'm1', board: [[0]], currentTurn: 'u1', myPlayerId: 'u1',
         players: [], scores: { u1: 0, u2: 0 }, round: 1, totalRounds: 3,
-        config: {} as any, winner: null, isDraw: false, lastMove: null,
+        config: { mode: 'classic' as const, connectN: 4, totalRounds: 3, rows: 6, cols: 7 }, winner: null, isDraw: false, lastMove: null,
         disconnectedPlayers: [], ratingChanges: {}, rematchVotes: [],
+        blockedCells: [],
       },
     });
 
@@ -459,8 +487,9 @@ describe('socket events', () => {
       onlineMatch: {
         matchId: 'm1', board: [[0]], currentTurn: 'u1', myPlayerId: 'u1',
         players: [], scores: { u1: 2, u2: 1 }, round: 3, totalRounds: 3,
-        config: {} as any, winner: null, isDraw: false, lastMove: null,
+        config: { mode: 'classic' as const, connectN: 4, totalRounds: 3, rows: 6, cols: 7 }, winner: null, isDraw: false, lastMove: null,
         disconnectedPlayers: [], ratingChanges: {}, rematchVotes: [],
+        blockedCells: [],
       },
     });
 
@@ -481,8 +510,9 @@ describe('socket events', () => {
       onlineMatch: {
         matchId: 'm1', board: [[0]], currentTurn: 'u1', myPlayerId: 'u1',
         players: [], scores: {}, round: 1, totalRounds: 3,
-        config: {} as any, winner: null, isDraw: false, lastMove: null,
+        config: { mode: 'classic' as const, connectN: 4, totalRounds: 3, rows: 6, cols: 7 }, winner: null, isDraw: false, lastMove: null,
         disconnectedPlayers: [], ratingChanges: {}, rematchVotes: [],
+        blockedCells: [],
       },
     });
 
@@ -496,8 +526,9 @@ describe('socket events', () => {
       onlineMatch: {
         matchId: 'm1', board: [[0]], currentTurn: 'u1', myPlayerId: 'u1',
         players: [], scores: {}, round: 1, totalRounds: 3,
-        config: {} as any, winner: null, isDraw: false, lastMove: null,
+        config: { mode: 'classic' as const, connectN: 4, totalRounds: 3, rows: 6, cols: 7 }, winner: null, isDraw: false, lastMove: null,
         disconnectedPlayers: ['u2'], ratingChanges: {}, rematchVotes: [],
+        blockedCells: [],
       },
     });
 
@@ -508,7 +539,7 @@ describe('socket events', () => {
 
   it('match_found from queue sets up match', () => {
     useOnlineStore.setState({
-      user: { id: 'u1', username: 'Alice' } as any,
+      user: { id: 'u1', username: 'Alice', email: 'a@test.com', preferredColor: '#f00', rating: 1200, gamesPlayed: 0, wins: 0, losses: 0, draws: 0 },
       isInQueue: true,
       onlinePhase: 'quickplay-queue',
     });
@@ -523,7 +554,7 @@ describe('socket events', () => {
 
     const s = useOnlineStore.getState();
     expect(s.isInQueue).toBe(false);
-    expect(s.onlinePhase).toBe('online-playing');
+    expect(s.onlinePhase).toBe('match-loading');
     expect(s.onlineMatch).not.toBeNull();
     expect(s.onlineMatch!.players).toEqual(players);
   });

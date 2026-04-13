@@ -7,10 +7,18 @@ const WS_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').rep
 
 export class WebSocketService {
   private socket: TypedSocket | null = null;
-  private listeners = new Map<string, Set<Function>>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private listeners = new Map<string, Set<(...args: any[]) => void>>();
 
   connect(token: string): void {
     if (this.socket?.connected) return;
+
+    // Clean up any existing disconnected socket before creating a new one
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+      this.socket = null;
+    }
 
     this.socket = io(WS_URL, {
       auth: { token },
@@ -51,9 +59,11 @@ export class WebSocketService {
 
   disconnect(): void {
     if (this.socket) {
+      this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
     }
+    this.listeners.clear();
   }
 
   isConnected(): boolean {
@@ -105,15 +115,21 @@ export class WebSocketService {
   }
 
   // Event subscription
-  on(event: string, callback: Function): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  on(event: string, callback: (...args: any[]) => void): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
     this.listeners.get(event)!.add(callback);
   }
 
-  off(event: string, callback: Function): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  off(event: string, callback: (...args: any[]) => void): void {
     this.listeners.get(event)?.delete(callback);
+  }
+
+  removeAllListeners(): void {
+    this.listeners.clear();
   }
 }
 
