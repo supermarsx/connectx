@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { v4 as uuidv4 } from "uuid";
 import * as discoveryService from "../discovery/discoveryService.js";
 import type { RoomInfo } from "../discovery/discoveryService.js";
+import { moderationService } from "../moderation/moderationService.js";
 
 export interface RoomPlayer {
   userId: string;
@@ -110,12 +111,12 @@ export class LobbyManager {
     return room;
   }
 
-  joinRoom(
+  async joinRoom(
     roomId: string,
     userId: string,
     userName: string,
     inviteCode?: string,
-  ): Room {
+  ): Promise<Room> {
     const room = this.rooms.get(roomId);
     if (!room) throw new Error("Room not found");
     if (room.status !== "waiting")
@@ -126,6 +127,15 @@ export class LobbyManager {
       throw new Error("Invalid invite code");
     if (room.players.some((p) => p.userId === userId))
       throw new Error("Already in this room");
+
+    // Check block relationships with all existing room members
+    for (const member of room.players) {
+      const blocked = await moderationService.isBlocked(userId, member.userId)
+        || await moderationService.isBlocked(member.userId, userId);
+      if (blocked) {
+        throw new Error("Cannot join: a block relationship exists with a player in this room");
+      }
+    }
 
     const usedColors = new Set(room.players.map((p) => p.color));
     const availableColor =

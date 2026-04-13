@@ -2,7 +2,7 @@ import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { config } from "../config.js";
-import { query } from "../db/pool.js";
+import { query } from "../db/provider.js";
 import { hashPassword, verifyPassword } from "./passwordUtils.js";
 import { authMiddleware } from "./authMiddleware.js";
 
@@ -51,10 +51,12 @@ authRouter.post("/register", async (req, res, next) => {
       return;
     }
 
-    const { username, email, password } = parsed.data;
+    const username = parsed.data.username.trim();
+    const email = parsed.data.email.toLowerCase().trim();
+    const password = parsed.data.password;
     const hash = await hashPassword(password);
 
-    const result = await query(
+    const result = await query<{ id: string; username: string; email: string; display_name: string; preferred_color: string; avatar_url: string | null; rating: number; games_played: number; wins: number; losses: number; draws: number; created_at: string }>(
       `INSERT INTO users (username, email, password_hash, display_name)
        VALUES ($1, $2, $3, $1)
        RETURNING id, username, email, display_name, preferred_color, avatar_url,
@@ -67,12 +69,9 @@ authRouter.post("/register", async (req, res, next) => {
 
     res.status(201).json({ token, user });
   } catch (err: unknown) {
-    const pgErr = err as { code?: string; constraint?: string };
-    if (pgErr.code === "23505") {
-      const field = pgErr.constraint?.includes("username")
-        ? "username"
-        : "email";
-      res.status(409).json({ error: `${field} already taken` });
+    const pgErr = err as { code?: string; constraint?: string; message?: string };
+    if (pgErr.code === "23505" || pgErr.code === "SQLITE_CONSTRAINT_UNIQUE" || pgErr.message?.includes("UNIQUE constraint failed")) {
+      res.status(409).json({ error: "An account with that username or email already exists" });
       return;
     }
     next(err);
@@ -89,9 +88,10 @@ authRouter.post("/login", async (req, res, next) => {
       return;
     }
 
-    const { email, password } = parsed.data;
+    const email = parsed.data.email.toLowerCase().trim();
+    const password = parsed.data.password;
 
-    const result = await query(
+    const result = await query<{ id: string; username: string; email: string; password_hash: string; display_name: string; preferred_color: string; avatar_url: string | null; rating: number; games_played: number; wins: number; losses: number; draws: number; created_at: string }>(
       `SELECT * FROM users WHERE email = $1`,
       [email],
     );
@@ -102,7 +102,7 @@ authRouter.post("/login", async (req, res, next) => {
     }
 
     const user = result.rows[0];
-    const valid = await verifyPassword(password, user.password_hash);
+    const valid = await verifyPassword(password, user.password_hash as string);
     if (!valid) {
       res.status(401).json({ error: "Invalid email or password" });
       return;

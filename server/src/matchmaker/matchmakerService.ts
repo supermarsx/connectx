@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { QueueBucket } from "./queueManager.js";
 import type { QueuePreferences } from "./queueManager.js";
+import { analyticsService } from "../analytics/analyticsService.js";
 
 export interface MatchedPlayer {
   userId: string;
@@ -46,6 +47,7 @@ export class MatchmakerService {
   private userBucket = new Map<string, string>();
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private onMatchReady: MatchReadyCallback | null = null;
+  private ticking = false;
 
   constructor() {
     this.startTick();
@@ -59,6 +61,7 @@ export class MatchmakerService {
     userId: string,
     userName: string,
     preferences: QueuePreferences,
+    rating: number = 1200,
   ): { position: number } {
     this.leaveQueue(userId);
 
@@ -72,11 +75,20 @@ export class MatchmakerService {
     const position = bucket.add({
       userId,
       name: userName,
+      rating,
       joinedAt: Date.now(),
       preferences,
     });
 
     this.userBucket.set(userId, key);
+
+    analyticsService.track({
+      type: "queue_joined",
+      userId: userId.slice(0, 8),
+      preferences: preferences as unknown as Record<string, unknown>,
+      rating,
+    }).catch(() => {});
+
     return { position };
   }
 
@@ -112,12 +124,20 @@ export class MatchmakerService {
     this.tickTimer = setInterval(() => this.tick(), TICK_INTERVAL);
   }
 
-  private tick(): void {
+  private async tick(): Promise<void> {
+    if (this.ticking) return;
+    this.ticking = true;
+    try {
     const now = Date.now();
 
     for (const [key, bucket] of this.buckets) {
-      if (bucket.size() >= 2) {
-        this.formMatch(key, bucket, false);
+      // Try rating-based matching first
+      const ratingMatch = await bucket.takeRatingMatch(now);
+      if (ratingMatch) {
+        for (const entry of ratingMatch) {
+          this.userBucket.delete(entry.userId);
+        }
+        this.formMatchFromEntries(key, ratingMatch, false);
         continue;
       }
 
@@ -131,6 +151,63 @@ export class MatchmakerService {
           this.formMatch(key, bucket, true);
         }
       }
+    }
+    } finally {
+      this.ticking = false;
+    }
+  }
+
+  private formMatchFromEntries(
+    key: string,
+    entries: import("./queueManager.js").QueueEntry[],
+    fillWithBots: boolean,
+  ): void {
+    const [mode, connectNStr] = key.split(":");
+    const connectN = parseInt(connectNStr, 10);
+    const { rows, cols } = getBoardSize(mode, connectN);
+
+    const players: MatchedPlayer[] = entries.map((entry, i) => ({
+      userId: entry.userId,
+      name: entry.name,
+      color: DEFAULT_COLORS[i],
+      isBot: false,
+    }));
+
+    if (fillWithBots && players.length < 2) {
+      while (players.length < 2) {
+        const botIdx = players.length;
+        players.push({
+          userId: `bot-${uuidv4().slice(0, 8)}`,
+          name: `Bot ${botIdx}`,
+          color: DEFAULT_COLORS[botIdx],
+          isBot: true,
+        });
+      }
+    }
+
+    if (players.length < 2) return;
+
+    const matchId = uuidv4();
+    const config: MatchConfig = {
+      mode: mode as "classic" | "fullboard",
+      connectN,
+      totalRounds: 1,
+      rows,
+      cols,
+    };
+
+    if (this.onMatchReady) {
+      const ratings = entries.map((e) => e.rating);
+      const spread = ratings.length > 1 ? Math.max(...ratings) - Math.min(...ratings) : 0;
+      const maxWait = entries.reduce((max, e) => Math.max(max, Date.now() - e.joinedAt), 0);
+      analyticsService.track({
+        type: "queue_matched",
+        matchId,
+        waitTimeMs: maxWait,
+        ratingSpread: spread,
+      }).catch(() => {});
+
+      this.onMatchReady(matchId, players, config);
     }
   }
 

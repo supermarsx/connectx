@@ -13,14 +13,29 @@ import * as connectionManager from "../ws/connectionManager.js";
 import { botService } from "../bot/botService.js";
 import { scheduleBotTurnIfNeeded } from "../bot/botTurnScheduler.js";
 import { leaderboardService } from "../leaderboard/leaderboardService.js";
+import { analyticsService } from "../analytics/analyticsService.js";
+import {
+  isBotServiceConnected,
+  setBotMoveResultCallback,
+  emitBotSpawn,
+  emitBotMatchStarted,
+  emitBotStateUpdate,
+  emitBotRoundStarted,
+  emitBotMatchEnded,
+} from "../ws/botNamespace.js";
 
 type TypedServer = Server<ClientToServerEvents, ServerToClientEvents>;
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 /** Call once after Socket.IO server is created to wire callbacks. */
 export function initGameCore(io: TypedServer): void {
-  // Wire bot service to broadcast move outcomes
+  // Wire bot service to broadcast move outcomes (in-process fallback)
   botService.setMoveResultCallback(async (matchId, outcome) => {
+    await broadcastMoveOutcome(io, matchId, outcome);
+  });
+
+  // Wire external bot service move result callback
+  setBotMoveResultCallback(async (matchId, outcome) => {
     await broadcastMoveOutcome(io, matchId, outcome);
   });
 
@@ -76,6 +91,33 @@ export function initGameCore(io: TypedServer): void {
 
 // ── Public handler functions ──
 
+/**
+ * Trigger a bot turn: delegates to the external bot service if connected,
+ * otherwise falls back to the in-process bot scheduler.
+ */
+function triggerBotTurn(matchId: string): void {
+  if (isBotServiceConnected()) {
+    // External bot service handles scheduling — send state_update
+    const match = matchManager.getMatch(matchId);
+    if (!match) return;
+    const currentPlayer = match.players[match.currentTurnIndex];
+    if (!currentPlayer?.isBot) return;
+    emitBotStateUpdate({
+      matchId,
+      board: match.board,
+      currentTurn: currentPlayer.userId,
+      lastMove: {
+        row: match.moveHistory.at(-1)?.row ?? -1,
+        col: match.moveHistory.at(-1)?.col ?? -1,
+        playerId: match.moveHistory.at(-1)?.playerId ?? "",
+      },
+      scores: match.scores,
+    });
+  } else {
+    scheduleBotTurnIfNeeded(matchId);
+  }
+}
+
 /** Create match, emit match_started to the room. Returns the match. */
 export function handleMatchStart(
   io: TypedServer,
@@ -93,7 +135,51 @@ export function handleMatchStart(
     config: match.config,
   });
 
-  scheduleBotTurnIfNeeded(matchId);
+  analyticsService.track({
+    type: "match_started",
+    mode: config.mode,
+    connectN: config.connectN,
+    playerCount: players.length,
+    isRanked: !players.some((p) => p.isBot),
+  }).catch(() => {});
+
+  // Notify external bot service of match with bots
+  if (isBotServiceConnected()) {
+    const botPlayers = match.players.filter((p) => p.isBot);
+    for (const bot of botPlayers) {
+      emitBotSpawn({
+        matchId: match.matchId,
+        botId: bot.userId,
+        difficulty: (bot.name.toLowerCase().includes("easy") ? "easy" :
+                     bot.name.toLowerCase().includes("hard") ? "hard" : "medium") as "easy" | "medium" | "hard",
+        playerIndex: bot.playerIndex,
+        color: bot.color,
+        name: bot.name,
+      });
+    }
+    if (botPlayers.length > 0) {
+      emitBotMatchStarted({
+        matchId: match.matchId,
+        board: match.board,
+        blockedCells: match.blockedCells,
+        turnOrder: match.players.map((p) => p.userId),
+        currentTurn: match.players[match.currentTurnIndex].userId,
+        config: {
+          rows: match.config.rows,
+          cols: match.config.cols,
+          connectN: match.config.connectN,
+        },
+        players: match.players.map((p) => ({
+          userId: p.userId,
+          name: p.name,
+          isBot: p.isBot,
+          playerIndex: p.playerIndex,
+        })),
+      });
+    }
+  }
+
+  triggerBotTurn(matchId);
 
   return match;
 }
@@ -110,7 +196,7 @@ export async function handleSubmitMove(
     | undefined;
   if (!user) return;
 
-  const outcome = matchManager.processMove(matchId, user.id, col);
+  const outcome = await matchManager.processMove(matchId, user.id, col);
   await broadcastMoveOutcome(io, matchId, outcome, socket);
 }
 
@@ -125,6 +211,12 @@ export function handlePlayerDisconnect(
     playerId: userId,
     timeout: 60,
   });
+
+  analyticsService.track({
+    type: "match_abandoned",
+    matchId,
+    reason: "disconnect",
+  }).catch(() => {});
 }
 
 /** Restore a reconnecting player: send full state, notify the room. */
@@ -193,7 +285,7 @@ export async function handleRematchRequest(
       config: newMatch.config,
     });
 
-    scheduleBotTurnIfNeeded(newMatch.matchId);
+    triggerBotTurn(newMatch.matchId);
   }
 }
 
@@ -217,7 +309,7 @@ async function broadcastMoveOutcome(
         },
         scores: matchManager.getMatch(matchId)?.scores ?? {},
       });
-      scheduleBotTurnIfNeeded(matchId);
+      triggerBotTurn(matchId);
       break;
 
     case "roundEnd":
@@ -240,7 +332,22 @@ async function broadcastMoveOutcome(
             scores:
               matchManager.getMatch(matchId)?.scores ?? {},
           });
-          scheduleBotTurnIfNeeded(matchId);
+
+          // Notify external bot service of new round
+          if (isBotServiceConnected()) {
+            const m = matchManager.getMatch(matchId);
+            if (m) {
+              emitBotRoundStarted({
+                matchId,
+                board: roundStart.board,
+                blockedCells: m.blockedCells,
+                currentTurn: roundStart.currentTurn,
+                round: roundStart.round,
+              });
+            }
+          }
+
+          triggerBotTurn(matchId);
         }
       }, 3000);
       break;
@@ -278,8 +385,25 @@ async function broadcastMoveOutcome(
       });
 
       if (match) {
+        const winnerIsBot = outcome.winner
+          ? match.players.some((p) => p.userId === outcome.winner && p.isBot)
+          : false;
+        analyticsService.track({
+          type: "match_completed",
+          matchId,
+          mode: match.config.mode,
+          duration: Math.floor((Date.now() - match.createdAt) / 1000),
+          rounds: match.round,
+          winnerIsBot,
+        }).catch(() => {});
+
         await matchManager.cleanupMatch(matchId);
         await cleanupPlayerStates(match);
+
+        // Notify external bot service that match is over
+        if (isBotServiceConnected()) {
+          emitBotMatchEnded({ matchId });
+        }
       }
       break;
     }

@@ -11,18 +11,73 @@ import { matchmakerService } from "../matchmaker/matchmakerService.js";
 import * as connectionManager from "./connectionManager.js";
 import * as gameCore from "../game/gameCore.js";
 import type { MatchedPlayerInput } from "../game/matchManager.js";
+import { query } from "../db/provider.js";
+import { revalidateToken } from "../auth/authMiddleware.js";
+import { z } from "zod";
+
+const joinQueueSchema = z.object({
+  mode: z.enum(["classic", "fullboard"]),
+  connectN: z.union([z.literal(4), z.literal(5), z.literal(6)]),
+  allowBots: z.boolean(),
+});
+
+const createRoomSchema = z.object({
+  name: z.string().min(1).max(50),
+  maxPlayers: z.union([z.literal(2), z.literal(3), z.literal(4)]),
+  mode: z.enum(["classic", "fullboard"]),
+  connectN: z.union([z.literal(4), z.literal(5), z.literal(6)]),
+  isPublic: z.boolean(),
+  totalRounds: z.number().int().min(1).max(10),
+});
+
+const VALID_EMOTE_IDS = new Set([
+  "gg", "wp", "gl", "hf", "nice", "oops", "wow", "think",
+  "wave", "laugh", "cry", "angry", "heart", "fire", "thumbsup", "thumbsdown",
+]);
 
 type TypedServer = Server<ClientToServerEvents, ServerToClientEvents>;
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
-function roomPlayersToPlayerInfo(room: Room): PlayerInfo[] {
-  return room.players.map((p) => ({
-    id: p.userId,
-    name: p.name,
-    color: p.color,
-    isBot: false,
-    rating: 1000,
-  }));
+// Emote rate limiting: max 3 per 5 seconds per user
+const emoteRateMap = new Map<string, number[]>();
+const EMOTE_RATE_LIMIT = 3;
+const EMOTE_RATE_WINDOW = 5000;
+
+export function clearEmoteRateLimit(userId: string): void {
+  emoteRateMap.delete(userId);
+}
+
+function isEmoteRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const timestamps = emoteRateMap.get(userId) ?? [];
+  const recent = timestamps.filter(t => now - t < EMOTE_RATE_WINDOW);
+  if (recent.length >= EMOTE_RATE_LIMIT) {
+    emoteRateMap.set(userId, recent);
+    return true;
+  }
+  recent.push(now);
+  emoteRateMap.set(userId, recent);
+  return false;
+}
+
+async function roomPlayersToPlayerInfo(room: Room): Promise<PlayerInfo[]> {
+  return Promise.all(
+    room.players.map(async (p) => {
+      let rating = 1000;
+      const res = await query<{ rating: number }>(
+        "SELECT rating FROM users WHERE id = $1",
+        [p.userId],
+      );
+      if (res.rows[0]) rating = res.rows[0].rating;
+      return {
+        id: p.userId,
+        name: p.name,
+        color: p.color,
+        isBot: false,
+        rating,
+      };
+    }),
+  );
 }
 
 function roomToProtocolConfig(room: Room): ProtocolRoomConfig {
@@ -81,6 +136,14 @@ export async function handleSubmitMove(
     | undefined;
   if (!user) return;
 
+  // Re-validate auth token before processing critical move
+  const token = socket.handshake.auth?.token as string | undefined;
+  if (!token || !revalidateToken(token)) {
+    socket.emit("move_rejected", { reason: "Authentication expired" });
+    socket.disconnect();
+    return;
+  }
+
   const state = await connectionManager.getPlayerState(user.id);
   const matchId = state?.matchId;
   if (!matchId) {
@@ -102,16 +165,27 @@ export function registerHandlers(socket: TypedSocket, io: TypedServer): void {
 
   // ── Queue Handlers ──
 
-  socket.on("join_queue", async (data) => {
+  socket.on("join_queue", async (data: { mode: 'classic' | 'fullboard'; connectN: 4 | 5 | 6; allowBots: boolean }) => {
     try {
+      const parsed = joinQueueSchema.safeParse(data);
+      if (!parsed.success) {
+        socket.emit("error", { code: "QUEUE_JOIN_FAILED", message: "Invalid queue parameters" });
+        return;
+      }
+      const { mode, connectN, allowBots } = parsed.data;
+
+      let rating = 1200;
+      const res = await query<{ rating: number }>(
+        "SELECT rating FROM users WHERE id = $1",
+        [user.id],
+      );
+      if (res.rows[0]) rating = res.rows[0].rating;
+
       const { position } = matchmakerService.joinQueue(
         user.id,
         user.username,
-        {
-          mode: data.mode,
-          connectN: data.connectN,
-          allowBots: data.allowBots,
-        },
+        { mode, connectN, allowBots },
+        rating,
       );
       await connectionManager.setPlayerState(user.id, { status: "inQueue" });
       socket.emit("queue_joined", { position });
@@ -139,16 +213,14 @@ export function registerHandlers(socket: TypedSocket, io: TypedServer): void {
 
   // ── Room Handlers ──
 
-  socket.on("create_room", async (data) => {
+  socket.on("create_room", async (data: { name: string; maxPlayers: 2 | 3 | 4; mode: 'classic' | 'fullboard'; connectN: 4 | 5 | 6; isPublic: boolean; totalRounds: number }) => {
     try {
-      const room = lobbyManager.createRoom(user.id, user.username, {
-        name: data.name,
-        maxPlayers: data.maxPlayers,
-        mode: data.mode,
-        connectN: data.connectN,
-        isPublic: data.isPublic,
-        totalRounds: data.totalRounds,
-      });
+      const parsed = createRoomSchema.safeParse(data);
+      if (!parsed.success) {
+        socket.emit("error", { code: "ROOM_CREATE_FAILED", message: "Invalid room parameters" });
+        return;
+      }
+      const room = lobbyManager.createRoom(user.id, user.username, parsed.data);
 
       socket.join(room.roomId);
       await connectionManager.setPlayerState(user.id, {
@@ -169,9 +241,9 @@ export function registerHandlers(socket: TypedSocket, io: TypedServer): void {
     }
   });
 
-  socket.on("join_room", async (data) => {
+  socket.on("join_room", async (data: { roomId: string; inviteCode?: string }) => {
     try {
-      const room = lobbyManager.joinRoom(
+      const room = await lobbyManager.joinRoom(
         data.roomId,
         user.id,
         user.username,
@@ -186,7 +258,7 @@ export function registerHandlers(socket: TypedSocket, io: TypedServer): void {
 
       io.to(room.roomId).emit("room_update", {
         roomId: room.roomId,
-        players: roomPlayersToPlayerInfo(room),
+        players: await roomPlayersToPlayerInfo(room),
         hostId: room.hostId,
         config: roomToProtocolConfig(room),
       });
@@ -212,7 +284,7 @@ export function registerHandlers(socket: TypedSocket, io: TypedServer): void {
       if (room) {
         io.to(room.roomId).emit("room_update", {
           roomId: room.roomId,
-          players: roomPlayersToPlayerInfo(room),
+          players: await roomPlayersToPlayerInfo(room),
           hostId: room.hostId,
           config: roomToProtocolConfig(room),
         });
@@ -228,7 +300,7 @@ export function registerHandlers(socket: TypedSocket, io: TypedServer): void {
     }
   });
 
-  socket.on("select_color", async (data) => {
+  socket.on("select_color", async (data: { color: string }) => {
     try {
       const state = await connectionManager.getPlayerState(user.id);
       if (!state?.roomId) {
@@ -257,7 +329,7 @@ export function registerHandlers(socket: TypedSocket, io: TypedServer): void {
       if (room) {
         io.to(room.roomId).emit("room_update", {
           roomId: room.roomId,
-          players: roomPlayersToPlayerInfo(room),
+          players: await roomPlayersToPlayerInfo(room),
           hostId: room.hostId,
           config: roomToProtocolConfig(room),
         });
@@ -295,9 +367,14 @@ export function registerHandlers(socket: TypedSocket, io: TypedServer): void {
 
   // ── Match Handlers ──
 
-  socket.on("submit_move", async (data) => {
+  socket.on("submit_move", async (data: { col: number }) => {
+    const col = typeof data?.col === 'number' ? Math.floor(data.col) : NaN;
+    if (!Number.isFinite(col) || col < 0) {
+      socket.emit("move_rejected", { reason: "Invalid column" });
+      return;
+    }
     try {
-      await handleSubmitMove(socket, io, data.col);
+      await handleSubmitMove(socket, io, col);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to submit move";
@@ -319,8 +396,11 @@ export function registerHandlers(socket: TypedSocket, io: TypedServer): void {
     }
   });
 
-  socket.on("chat_emote", async (data) => {
+  socket.on("chat_emote", async (data: { emoteId: string }) => {
     try {
+      if (isEmoteRateLimited(user.id)) return;
+      if (!data?.emoteId || typeof data.emoteId !== "string" || !VALID_EMOTE_IDS.has(data.emoteId)) return;
+
       const state = await connectionManager.getPlayerState(user.id);
       const channelId = state?.matchId ?? state?.roomId;
       if (!channelId) return;

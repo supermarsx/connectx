@@ -7,12 +7,46 @@ const MOVE_WINDOW_MS = 1000;
 
 const moveTimestamps = new Map<string, number[]>();
 
+// Periodically clean up stale entries (every 5 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, timestamps] of moveTimestamps) {
+    const recent = timestamps.filter(t => now - t < MOVE_WINDOW_MS);
+    if (recent.length === 0) {
+      moveTimestamps.delete(userId);
+    } else {
+      moveTimestamps.set(userId, recent);
+    }
+  }
+}, 5 * 60 * 1000);
+
+/** Load existing rate-limit timestamps from Redis into the local cache. */
+export async function recoverRateLimitsFromRedis(userId: string): Promise<void> {
+  try {
+    const now = Date.now();
+    const key = `connectx:ratelimit:${userId}`;
+    // Fetch only timestamps within the current window
+    const entries = await redis.zrangebyscore(key, now - MOVE_WINDOW_MS, "+inf");
+    if (entries.length > 0) {
+      const timestamps = entries.map(Number).filter((t: number) => !isNaN(t));
+      moveTimestamps.set(userId, timestamps);
+    }
+  } catch (err: unknown) {
+    console.error(`[antiCheat] Failed to recover rate limits for ${userId}:`, err);
+  }
+}
+
 /** Check that a player isn't submitting moves faster than allowed */
-export function validateMoveRate(userId: string, now: number): boolean {
+export async function validateMoveRate(userId: string, now: number): Promise<boolean> {
   let timestamps = moveTimestamps.get(userId);
   if (!timestamps) {
-    timestamps = [];
-    moveTimestamps.set(userId, timestamps);
+    // L1 cache miss — hydrate from Redis
+    await recoverRateLimitsFromRedis(userId);
+    timestamps = moveTimestamps.get(userId);
+    if (!timestamps) {
+      timestamps = [];
+      moveTimestamps.set(userId, timestamps);
+    }
   }
 
   // Remove timestamps outside the window
@@ -25,6 +59,12 @@ export function validateMoveRate(userId: string, now: number): boolean {
   }
 
   timestamps.push(now);
+
+  // Persist to Redis for cross-restart tracking
+  redis.zadd(`connectx:ratelimit:${userId}`, now, `${now}`).catch(() => {});
+  redis.zremrangebyscore(`connectx:ratelimit:${userId}`, "-inf", now - MOVE_WINDOW_MS).catch(() => {});
+  redis.expire(`connectx:ratelimit:${userId}`, 5).catch(() => {});
+
   return true;
 }
 
@@ -44,6 +84,11 @@ export function validateMoveInput(col: number, match: OnlineMatch): boolean {
   return isValidMove(match.board, col, match.blockedCells);
 }
 
+/** Remove rate-limit entries for a user (call on match cleanup). */
+export function clearUserRateLimit(userId: string): void {
+  moveTimestamps.delete(userId);
+}
+
 /** Log suspicious activity to Redis for later review */
 export function logSuspiciousActivity(
   userId: string,
@@ -56,7 +101,7 @@ export function logSuspiciousActivity(
     details,
     timestamp: Date.now(),
   });
-  redis.lpush("connectx:anticheat:log", entry).catch((err) => {
+  redis.lpush("connectx:anticheat:log", entry).catch((err: unknown) => {
     console.error("[antiCheat] Failed to log suspicious activity:", err);
   });
   redis.ltrim("connectx:anticheat:log", 0, 9999).catch(() => {});

@@ -14,10 +14,11 @@ import {
   validateTurnOrder,
   validateMoveInput,
   logSuspiciousActivity,
+  clearUserRateLimit,
 } from "./antiCheat.js";
 import { ReconnectionManager } from "./reconnection.js";
 import { redis } from "../db/redis.js";
-import { query } from "../db/pool.js";
+import { getDb } from "../db/provider.js";
 
 // ── Types ──
 
@@ -122,6 +123,7 @@ export class MatchManager {
   private matches = new Map<string, OnlineMatch>();
   private userMatchIndex = new Map<string, string>(); // userId → matchId
   private turnTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private matchLocks = new Map<string, Promise<MoveOutcome>>();
   private reconnectionManager = new ReconnectionManager();
   private onTurnTimeoutCb:
     | ((matchId: string, outcome: MoveOutcome) => void)
@@ -190,8 +192,12 @@ export class MatchManager {
   ): OnlineMatch {
     const id = matchId ?? uuidv4();
 
-    // Randomize turn order
-    const shuffled = [...players].sort(() => Math.random() - 0.5);
+    // Randomize turn order (Fisher-Yates shuffle)
+    const shuffled = [...players];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
     const matchPlayers: MatchPlayer[] = shuffled.map((p, i) => ({
       userId: p.userId,
       name: p.name,
@@ -252,16 +258,48 @@ export class MatchManager {
     return this.matches.get(matchId) ?? null;
   }
 
+  getAllActiveMatches(): OnlineMatch[] {
+    const active: OnlineMatch[] = [];
+    for (const match of this.matches.values()) {
+      if (match.status === "active") {
+        active.push(match);
+      }
+    }
+    return active;
+  }
+
   /**
    * THE CORE METHOD — validate, apply, and evaluate a move.
    * @param isAutoPlay true when called by turn-timeout (skips anti-cheat)
    */
-  processMove(
+  async processMove(
     matchId: string,
     userId: string,
     col: number,
     isAutoPlay = false,
-  ): MoveOutcome {
+  ): Promise<MoveOutcome> {
+    // Serialize moves per match to prevent TOCTOU races
+    const prev = this.matchLocks.get(matchId) ?? Promise.resolve({ type: "invalid" as const, reason: "" });
+    const current = prev.catch(() => {}).then(() =>
+      this._processMoveLocked(matchId, userId, col, isAutoPlay),
+    );
+    this.matchLocks.set(matchId, current);
+    try {
+      return await current;
+    } finally {
+      // Clean up if this is still the latest promise
+      if (this.matchLocks.get(matchId) === current) {
+        this.matchLocks.delete(matchId);
+      }
+    }
+  }
+
+  private async _processMoveLocked(
+    matchId: string,
+    userId: string,
+    col: number,
+    isAutoPlay: boolean,
+  ): Promise<MoveOutcome> {
     const match = this.matches.get(matchId);
     if (!match) return { type: "invalid", reason: "Match not found" };
     if (match.status !== "active")
@@ -269,7 +307,7 @@ export class MatchManager {
 
     // ── Anti-cheat (skipped for auto-play / timeouts) ──
     if (!isAutoPlay) {
-      if (!validateMoveRate(userId, Date.now())) {
+      if (!(await validateMoveRate(userId, Date.now()))) {
         logSuspiciousActivity(
           userId,
           "rapid_moves",
@@ -294,6 +332,10 @@ export class MatchManager {
         return { type: "invalid", reason: "Invalid move" };
       }
     }
+
+    // Re-validate after async anti-cheat — state may have changed during await
+    if (match.status !== "active")
+      return { type: "invalid", reason: "Match is no longer active" };
 
     this.clearTurnTimer(matchId);
 
@@ -440,6 +482,7 @@ export class MatchManager {
   ): ReconnectOutcome | null {
     const match = this.matches.get(matchId);
     if (!match) return null;
+    if (match.status === "finished") return null;
 
     match.disconnectedPlayers.delete(userId);
     this.reconnectionManager.cancelTimer(matchId, userId);
@@ -489,7 +532,7 @@ export class MatchManager {
 
     this.clearTurnTimer(matchId);
 
-    // Persist to PostgreSQL
+    // Persist to PostgreSQL in a transaction
     try {
       const overallWinner = this.getOverallWinner(match);
       const winnerPlayer = overallWinner
@@ -502,37 +545,39 @@ export class MatchManager {
         (Date.now() - match.createdAt) / 1000,
       );
 
-      await query(
-        `INSERT INTO match_history (id, mode, connect_n, player_count, winner_id, is_draw, rounds_played, duration_seconds)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (id) DO NOTHING`,
-        [
-          matchId,
-          match.config.mode,
-          match.config.connectN,
-          match.players.length,
-          winnerId,
-          isDraw,
-          match.round,
-          durationSeconds,
-        ],
-      );
-
-      for (const player of match.players) {
-        if (player.isBot) continue;
-        await query(
-          `INSERT INTO match_players (match_id, user_id, player_index, is_bot, score)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (match_id, user_id) DO NOTHING`,
+      await getDb().transaction(async (txQuery) => {
+        await txQuery(
+          `INSERT INTO match_history (id, mode, connect_n, player_count, winner_id, is_draw, rounds_played, duration_seconds)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (id) DO NOTHING`,
           [
             matchId,
-            player.userId,
-            player.playerIndex,
-            player.isBot,
-            match.scores[player.userId] ?? 0,
+            match.config.mode,
+            match.config.connectN,
+            match.players.length,
+            winnerId,
+            isDraw,
+            match.round,
+            durationSeconds,
           ],
         );
-      }
+
+        for (const player of match.players) {
+          if (player.isBot) continue;
+          await txQuery(
+            `INSERT INTO match_players (match_id, user_id, player_index, is_bot, score)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (match_id, user_id) DO NOTHING`,
+            [
+              matchId,
+              player.userId,
+              player.playerIndex,
+              player.isBot,
+              match.scores[player.userId] ?? 0,
+            ],
+          );
+        }
+      });
     } catch (err) {
       console.error("[matchManager] Failed to save match to DB:", err);
     }
@@ -541,6 +586,7 @@ export class MatchManager {
     for (const player of match.players) {
       this.userMatchIndex.delete(player.userId);
       this.reconnectionManager.cancelTimer(matchId, player.userId);
+      clearUserRateLimit(player.userId);
     }
     this.matches.delete(matchId);
     redis.del(`connectx:match:${matchId}`).catch(() => {});
@@ -557,16 +603,18 @@ export class MatchManager {
     // Auto-play a random valid move for the timed-out player
     const randomCol =
       validMoves[Math.floor(Math.random() * validMoves.length)];
-    const outcome = this.processMove(
+    this.processMove(
       matchId,
       currentPlayer.userId,
       randomCol,
       true,
-    );
-
-    if (this.onTurnTimeoutCb && outcome.type !== "invalid") {
-      this.onTurnTimeoutCb(matchId, outcome);
-    }
+    ).then((outcome) => {
+      if (this.onTurnTimeoutCb && outcome.type !== "invalid") {
+        this.onTurnTimeoutCb(matchId, outcome);
+      }
+    }).catch((err) => {
+      console.error("[matchManager] Turn timeout processMove failed:", err);
+    });
   }
 
   // ── Private helpers ──
@@ -663,6 +711,23 @@ export class MatchManager {
         this.onPlayerTimeoutCb(matchId, userId);
       }
     }
+  }
+
+  async persistAllMatchesToRedis(): Promise<number> {
+    let persisted = 0;
+    for (const match of this.matches.values()) {
+      if (match.status === "finished") continue;
+      try {
+        await this.persistMatchToRedis(match);
+        persisted++;
+      } catch (err) {
+        console.error(`[matchManager] Failed to persist match ${match.matchId}:`, err);
+      }
+    }
+    if (persisted > 0) {
+      console.log(`[matchManager] Persisted ${persisted} active match(es) to Redis`);
+    }
+    return persisted;
   }
 
   private async persistMatchToRedis(match: OnlineMatch): Promise<void> {

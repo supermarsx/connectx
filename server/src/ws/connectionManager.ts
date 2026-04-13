@@ -26,16 +26,51 @@ export async function registerConnection(
   await pipeline.exec();
 }
 
+// Lua script: atomically look up userId from socket, compare, and clean up
+const REMOVE_CONN_LUA = `
+local socketKey = KEYS[1]
+local userId = redis.call('GET', socketKey)
+redis.call('DEL', socketKey)
+if not userId then return 0 end
+local userKey    = KEYS[2] .. userId
+local stateKey   = KEYS[3] .. userId
+local onlineKey  = KEYS[4]
+local currentSid = redis.call('GET', userKey)
+if currentSid == ARGV[1] then
+  redis.call('DEL', userKey)
+  redis.call('DEL', stateKey)
+  redis.call('SREM', onlineKey, userId)
+end
+return 1
+`;
+
 export async function removeConnection(socketId: string): Promise<void> {
-  const userId = await redis.get(`${PREFIX}socket:${socketId}`);
-  const pipeline = redis.pipeline();
-  pipeline.del(`${PREFIX}socket:${socketId}`);
-  if (userId) {
-    pipeline.del(`${PREFIX}user:${userId}`);
-    pipeline.del(`${PREFIX}state:${userId}`);
-    pipeline.srem(`${PREFIX}online`, userId);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (redis as any).eval(
+      REMOVE_CONN_LUA,
+      4,
+      `${PREFIX}socket:${socketId}`,
+      `${PREFIX}user:`,
+      `${PREFIX}state:`,
+      `${PREFIX}online`,
+      socketId,
+    );
+  } catch {
+    // Fallback for environments where EVAL is unavailable (e.g. test stubs)
+    const userId = await redis.get(`${PREFIX}socket:${socketId}`);
+    const pipeline = redis.pipeline();
+    pipeline.del(`${PREFIX}socket:${socketId}`);
+    if (userId) {
+      const currentSocketId = await redis.get(`${PREFIX}user:${userId}`);
+      if (currentSocketId === socketId) {
+        pipeline.del(`${PREFIX}user:${userId}`);
+        pipeline.del(`${PREFIX}state:${userId}`);
+        pipeline.srem(`${PREFIX}online`, userId);
+      }
+    }
+    await pipeline.exec();
   }
-  await pipeline.exec();
 }
 
 export async function getSocketId(userId: string): Promise<string | null> {
@@ -50,7 +85,14 @@ export async function setPlayerState(
   userId: string,
   state: PlayerState,
 ): Promise<void> {
-  await redis.set(`${PREFIX}state:${userId}`, JSON.stringify(state), "EX", TTL);
+  const pipeline = redis.pipeline();
+  pipeline.set(`${PREFIX}state:${userId}`, JSON.stringify(state), "EX", TTL);
+  const socketId = await redis.get(`${PREFIX}user:${userId}`);
+  if (socketId) {
+    pipeline.expire(`${PREFIX}user:${userId}`, TTL);
+    pipeline.expire(`${PREFIX}socket:${socketId}`, TTL);
+  }
+  await pipeline.exec();
 }
 
 export async function getPlayerState(
@@ -58,7 +100,11 @@ export async function getPlayerState(
 ): Promise<PlayerState | null> {
   const data = await redis.get(`${PREFIX}state:${userId}`);
   if (!data) return null;
-  return JSON.parse(data) as PlayerState;
+  try {
+    return JSON.parse(data) as PlayerState;
+  } catch {
+    return null;
+  }
 }
 
 export async function getOnlineCount(): Promise<number> {

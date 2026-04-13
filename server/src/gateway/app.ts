@@ -4,11 +4,15 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import type { Request, Response, NextFunction } from "express";
 import { config } from "../config.js";
+import { query } from "../db/provider.js";
+import { redis } from "../db/redis.js";
 import { authRouter } from "../auth/authRoutes.js";
 import { profileRouter } from "../profile/profileRoutes.js";
 import { discoveryRouter } from "../discovery/discoveryRoutes.js";
 import { leaderboardRouter } from "../leaderboard/leaderboardRoutes.js";
 import { moderationRouter } from "../moderation/moderationRoutes.js";
+import { analyticsRouter } from "../analytics/analyticsRoutes.js";
+import { friendsRouter } from "../social/friendsRoutes.js";
 
 export function createApp() {
   const app = express();
@@ -53,10 +57,30 @@ export function createApp() {
   app.use("/api/rooms", discoveryRouter);
   app.use("/api/leaderboard", leaderboardRouter);
   app.use("/api/moderation", moderationRouter);
+  app.use("/api/analytics", analyticsRouter);
+  app.use("/api/friends", friendsRouter);
 
   // ── Health check ──
-  app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  app.get("/api/health", async (_req, res) => {
+    const checks: Record<string, string> = { server: "ok" };
+    try {
+      await query("SELECT 1");
+      checks.database = "ok";
+    } catch {
+      checks.database = "error";
+    }
+    try {
+      await redis.ping();
+      checks.cache = "ok";
+    } catch {
+      checks.cache = "error";
+    }
+    const overall = Object.values(checks).every((v) => v === "ok")
+      ? "ok"
+      : "degraded";
+    res
+      .status(overall === "ok" ? 200 : 503)
+      .json({ status: overall, checks });
   });
 
   // ── Error handler ──
