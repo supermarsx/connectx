@@ -1,4 +1,4 @@
-import { query } from "../db/pool.js";
+import { query } from "../db/provider.js";
 import { redis } from "../db/redis.js";
 
 const REPORT_RATE_LIMIT = 5;
@@ -15,9 +15,7 @@ class ModerationService {
     // Rate limit: 5 reports per hour per reporter
     const key = `connectx:report_rate:${reporterId}`;
     const count = await redis.incr(key);
-    if (count === 1) {
-      await redis.expire(key, REPORT_RATE_WINDOW);
-    }
+    await redis.expire(key, REPORT_RATE_WINDOW);
     if (count > REPORT_RATE_LIMIT) {
       throw new Error("Report rate limit exceeded: maximum 5 reports per hour");
     }

@@ -1,4 +1,4 @@
-import { query } from "../db/pool.js";
+import { query, getDb } from "../db/provider.js";
 import { calculateRatingChanges } from "./ratingSystem.js";
 import type { RatingChange } from "./ratingSystem.js";
 import type { MatchPlayer } from "../game/matchManager.js";
@@ -112,68 +112,71 @@ class LeaderboardService {
       changeMap[c.userId] = c.ratingChange;
     }
 
-    // 3. Update user stats and ratings
-    for (const change of changes) {
-      const isWinner = winnerId === change.userId;
-      const winsInc = isWinner ? 1 : 0;
-      const lossesInc = !isDraw && !isWinner ? 1 : 0;
-      const drawsInc = isDraw ? 1 : 0;
-
-      await query(
-        `UPDATE users SET
-          rating = $1,
-          rating_deviation = GREATEST(rating_deviation - 10, 50),
-          games_played = games_played + 1,
-          wins = wins + $3,
-          losses = losses + $4,
-          draws = draws + $5,
-          updated_at = NOW()
-        WHERE id = $2`,
-        [change.newRating, change.userId, winsInc, lossesInc, drawsInc],
-      );
-    }
-
-    // 4. Insert match_history
+    // 3–5. Update stats, insert match_history and match_players in a transaction
     const dbWinnerId =
       winnerId && !winnerId.startsWith("bot-") ? winnerId : null;
 
-    await query(
-      `INSERT INTO match_history (id, mode, connect_n, player_count, winner_id, is_draw, rounds_played, duration_seconds)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (id) DO NOTHING`,
-      [
-        matchId,
-        matchInfo.mode,
-        matchInfo.connectN,
-        players.length,
-        dbWinnerId,
-        isDraw,
-        matchInfo.roundsPlayed,
-        matchInfo.durationSeconds,
-      ],
-    );
+    await getDb().transaction(async (txQuery) => {
+      // 3. Update user stats and ratings
+      for (const change of changes) {
+        const isWinner = winnerId === change.userId;
+        const winsInc = isWinner ? 1 : 0;
+        const lossesInc = !isDraw && !isWinner ? 1 : 0;
+        const drawsInc = isDraw ? 1 : 0;
 
-    // 5. Insert match_players with rating_before / rating_after
-    for (const player of humanPlayers) {
-      const ratingBefore = ratingMap.get(player.userId)?.rating ?? null;
-      const change = changes.find((c) => c.userId === player.userId);
-      const ratingAfter = change?.newRating ?? ratingBefore;
+        await txQuery(
+          `UPDATE users SET
+            rating = $1,
+            rating_deviation = GREATEST(rating_deviation - 10, 50),
+            games_played = games_played + 1,
+            wins = wins + $3,
+            losses = losses + $4,
+            draws = draws + $5,
+            updated_at = NOW()
+          WHERE id = $2`,
+          [change.newRating, change.userId, winsInc, lossesInc, drawsInc],
+        );
+      }
 
-      await query(
-        `INSERT INTO match_players (match_id, user_id, player_index, is_bot, score, rating_before, rating_after)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (match_id, user_id) DO NOTHING`,
+      // 4. Insert match_history
+      await txQuery(
+        `INSERT INTO match_history (id, mode, connect_n, player_count, winner_id, is_draw, rounds_played, duration_seconds)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (id) DO NOTHING`,
         [
           matchId,
-          player.userId,
-          player.playerIndex,
-          player.isBot,
-          scores[player.userId] ?? 0,
-          ratingBefore,
-          ratingAfter,
+          matchInfo.mode,
+          matchInfo.connectN,
+          players.length,
+          dbWinnerId,
+          isDraw,
+          matchInfo.roundsPlayed,
+          matchInfo.durationSeconds,
         ],
       );
-    }
+
+      // 5. Insert match_players with rating_before / rating_after
+      for (const player of humanPlayers) {
+        const ratingBefore = ratingMap.get(player.userId)?.rating ?? null;
+        const change = changes.find((c) => c.userId === player.userId);
+        const ratingAfter = change?.newRating ?? ratingBefore;
+
+        await txQuery(
+          `INSERT INTO match_players (match_id, user_id, player_index, is_bot, score, rating_before, rating_after)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (match_id, user_id) DO NOTHING`,
+          [
+            matchId,
+            player.userId,
+            player.playerIndex,
+            player.isBot,
+            scores[player.userId] ?? 0,
+            ratingBefore,
+            ratingAfter,
+          ],
+        );
+      }
+    });
 
     return changeMap;
   }

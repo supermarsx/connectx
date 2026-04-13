@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { query } from "../db/pool.js";
+import { query } from "../db/provider.js";
 import { authMiddleware } from "../auth/authMiddleware.js";
 
 export const profileRouter = Router();
@@ -54,14 +54,21 @@ profileRouter.put("/me", authMiddleware, async (req, res, next) => {
       return;
     }
 
+    const ALLOWED_FIELDS = new Set(['display_name', 'preferred_color', 'avatar_url']);
     const setClauses: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
 
     for (const [key, value] of Object.entries(fields)) {
+      if (!ALLOWED_FIELDS.has(key)) continue;
       setClauses.push(`${key} = $${idx}`);
       values.push(value);
       idx++;
+    }
+
+    if (setClauses.length === 0) {
+      res.status(400).json({ error: "No valid fields to update" });
+      return;
     }
     setClauses.push(`updated_at = NOW()`);
     values.push(req.user!.id);

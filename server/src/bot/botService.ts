@@ -93,7 +93,7 @@ export class BotService {
     const col = this.requestBotMove(matchId, botUserId);
     if (col === -1) return;
 
-    const outcome = matchManager.processMove(matchId, botUserId, col, true);
+    const outcome = await matchManager.processMove(matchId, botUserId, col, true);
 
     if (this.moveResultCallback && outcome.type !== "invalid") {
       await this.moveResultCallback(matchId, outcome);
